@@ -1,0 +1,3 @@
+/Users/daniel/dev/fish-hash/cpp/CMakeFiles/FishHash.dir
+/Users/daniel/dev/fish-hash/cpp/CMakeFiles/edit_cache.dir
+/Users/daniel/dev/fish-hash/cpp/CMakeFiles/rebuild_cache.dir

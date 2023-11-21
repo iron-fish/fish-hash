@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libFishHash.a CMakeFiles/FishHash.dir/FishHash.cpp.o CMakeFiles/FishHash.dir/3rdParty/blake3.c.o CMakeFiles/FishHash.dir/3rdParty/blake3_portable.c.o CMakeFiles/FishHash.dir/3rdParty/blake3_dispatch.c.o CMakeFiles/FishHash.dir/3rdParty/keccak.c.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libFishHash.a
