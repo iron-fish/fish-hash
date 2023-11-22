@@ -1,0 +1,5 @@
+**/target/
+*.o
+**/CMakeFiles/
+.DS_Store
+.vscode
