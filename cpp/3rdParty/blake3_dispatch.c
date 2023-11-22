@@ -62,6 +62,7 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 #endif
 
 enum cpu_feature {
+  ZERO = 0,
   SSE2 = 1 << 0,
   SSSE3 = 1 << 1,
   SSE41 = 1 << 2,
@@ -128,7 +129,7 @@ static
     return features;
 #else
     /* How to detect NEON? */
-    return UNDEFINED;
+    return ZERO;
 #endif
   }
 }

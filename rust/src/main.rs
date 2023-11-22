@@ -1,12 +1,14 @@
 mod fish_hash_bindings;
 
 fn main() {
-    let input = "dsfdsfsdgfsdaafsd";
+    let input = "dsfdsfsdgdaafsd";
 
     unsafe {
         let context = fish_hash_bindings::get_context(true);
         let output =  hash(context, input);
-        dbg!(output);
+
+        // Print the hash as a hex string
+        print!("{:02X?}", output);
     }
 }
 
