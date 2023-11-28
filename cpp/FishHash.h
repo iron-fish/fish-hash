@@ -47,6 +47,7 @@ extern "C"
 		fishhash_context *get_context(bool full = false) noexcept;
 		void prebuild_dataset(fishhash_context *, uint32_t numThreads = 1) noexcept;
 		void hash(uint8_t *output, const fishhash_context *ctx, const uint8_t *header, uint64_t header_size) noexcept;
+		// TODO: Remove this when done testing
 		void keccak2(uint64_t *out, size_t bits, const uint8_t *data, size_t size) noexcept;
 	}
 
