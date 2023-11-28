@@ -24,7 +24,7 @@ fn main() {
 
         let mut out3: [u64; 8] = [0; 8];
         let mut item3 = Hash512([3u8; 64]);
-        keccak::keccak(&mut out3, 512, &mut item3, 64);
+        keccak::keccak(&mut out3, 512, item3.0.as_ptr(), 64);
 
         println!("{:?}", out3);
 

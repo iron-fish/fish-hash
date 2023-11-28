@@ -6,10 +6,10 @@ use crate::rust_hash::HashData;
 // hash512 item;
 // keccak(item.word64s, 512, seed.bytes, sizeof(seed))
 // inline void keccak(uint64_t* out, size_t bits, const uint8_t* data, size_t size)
-pub unsafe fn keccak<const T: usize, const N: usize>(
+pub unsafe fn keccak(
     out: &mut [u64],
     bits: usize, // TODO: This can probably be calculated from somewhere, or hard-coded
-    data: &impl HashData<T, N>,
+    data_ptr: *const u8,
     mut size: usize,
 ) {
     const WORD_SIZE: usize = size_of::<u64>();
@@ -21,13 +21,12 @@ pub unsafe fn keccak<const T: usize, const N: usize>(
     let mut last_word_iter: *mut u8 = (&mut last_word as *mut u64).cast();
 
     let mut state: [u64; 25] = [0; 25];
-
-    let mut data_ptr = data.as_ptr();
+    let mut data = data_ptr;
 
     while size >= block_size {
         for i in 0..(block_size / WORD_SIZE) {
-            state[i] ^= load_le(data_ptr);
-            data_ptr = data_ptr.add(WORD_SIZE);
+            state[i] ^= load_le(data);
+            data = data.add(WORD_SIZE);
         }
 
         f1600(&mut state);
@@ -38,16 +37,16 @@ pub unsafe fn keccak<const T: usize, const N: usize>(
     state_iter = state.as_mut_ptr();
 
     while size >= WORD_SIZE {
-        *state_iter ^= load_le(data_ptr);
+        *state_iter ^= load_le(data);
         state_iter = state_iter.add(1);
-        data_ptr = data_ptr.add(WORD_SIZE);
+        data = data.add(WORD_SIZE);
         size -= WORD_SIZE;
     }
 
     while size > 0 {
-        *last_word_iter = *data_ptr;
+        *last_word_iter = *data;
         last_word_iter = last_word_iter.add(1);
-        data_ptr = data_ptr.add(1);
+        data = data.add(1);
         size -= 1;
     }
     *last_word_iter = 0x01;

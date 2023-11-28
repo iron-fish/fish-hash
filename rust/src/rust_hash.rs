@@ -116,14 +116,14 @@ fn fishhash_kernel(context: &Context, seed: &[u8; 64]) -> [u8; 32] {
 
 unsafe fn build_light_cache(cache: &mut [Hash512; LIGHT_CACHE_NUM_ITEMS]) -> () {
     // let mut item: Hash512 = Hash512([0; 64]);
-    let mut item = [0u64; 8];
-    keccak(item, 512, &SEED, std::mem::size_of_val(&SEED));
-    cache[0] = Hash512(item);
+    // let mut item = [0u64; 8];
+    // keccak(item, 512, &SEED, std::mem::size_of_val(&SEED));
+    // cache[0] = Hash512(item);
 
-    for i in 0..LIGHT_CACHE_NUM_ITEMS {
-        let size = std::mem::size_of_val(&item);
-        keccak(item, 512, &item, size);
-    }
+    // for i in 0..LIGHT_CACHE_NUM_ITEMS {
+    //     let size = std::mem::size_of_val(&item);
+    //     keccak(item, 512, &item, size);
+    // }
 
     todo!()
 }
