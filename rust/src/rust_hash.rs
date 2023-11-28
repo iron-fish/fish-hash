@@ -1,5 +1,3 @@
-use std::mem::size_of;
-
 use blake3::Hasher;
 
 use crate::keccak::keccak;
@@ -13,62 +11,72 @@ const LIGHT_CACHE_ROUND: i32 = 3;
 const LIGHT_CACHE_NUM_ITEMS: usize = 1179641;
 const FULL_DATASET_NUM_ITEMS: usize = 37748717;
 const SEED: Hash256 = Hash256([
-    // const SEED: [u8; 32] = [
     0xeb, 0x01, 0x63, 0xae, 0xf2, 0xab, 0x1c, 0x5a, 0x66, 0x31, 0x0c, 0x1c, 0x14, 0xd6, 0x0f, 0x42,
     0x55, 0xa9, 0xb3, 0x9b, 0x0e, 0xdf, 0x26, 0x53, 0x98, 0x44, 0xf1, 0x17, 0xad, 0x67, 0x21, 0x19,
 ]);
 
-// type Hash256 = [u8; 32];
-// type Hash512 = [u8; 64];
-// type Hash1024 = [u8; 128];
-
 pub trait HashData<const U64_SIZE: usize, const U32_SIZE: usize> {
-    fn as_64s(&mut self) -> &mut [u64; U64_SIZE];
-    fn as_32s(&mut self) -> &mut [u32; U32_SIZE];
+    unsafe fn as_64s(&mut self) -> &mut [u64; U64_SIZE];
+    unsafe fn as_32s(&mut self) -> &mut [u32; U32_SIZE];
+    fn as_mut_ptr(&mut self) -> *mut u8;
+    fn as_ptr(&self) -> *const u8;
 }
 
 #[derive(Clone, Copy)]
 pub struct Hash256([u8; 32]);
 impl HashData<4, 8> for Hash256 {
-    fn as_64s(&mut self) -> &mut [u64; 4] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 32], &mut [u64; 4]>(&mut self.0);
-        }
+    unsafe fn as_64s(&mut self) -> &mut [u64; 4] {
+        std::mem::transmute::<&mut [u8; 32], &mut [u64; 4]>(&mut self.0)
     }
 
-    fn as_32s(&mut self) -> &mut [u32; 8] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 32], &mut [u32; 8]>(&mut self.0);
-        }
+    unsafe fn as_32s(&mut self) -> &mut [u32; 8] {
+        std::mem::transmute::<&mut [u8; 32], &mut [u32; 8]>(&mut self.0)
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.0.as_mut_ptr()
+    }
+
+    fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
     }
 }
+
 #[derive(Clone, Copy)]
-pub struct Hash512([u8; 64]);
+pub struct Hash512(pub [u8; 64]);
 impl HashData<8, 16> for Hash512 {
-    fn as_64s(&mut self) -> &mut [u64; 8] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 64], &mut [u64; 8]>(&mut self.0);
-        }
+    unsafe fn as_64s(&mut self) -> &mut [u64; 8] {
+        std::mem::transmute::<&mut [u8; 64], &mut [u64; 8]>(&mut self.0)
     }
 
-    fn as_32s(&mut self) -> &mut [u32; 16] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 64], &mut [u32; 16]>(&mut self.0);
-        }
+    unsafe fn as_32s(&mut self) -> &mut [u32; 16] {
+        std::mem::transmute::<&mut [u8; 64], &mut [u32; 16]>(&mut self.0)
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.0.as_mut_ptr()
+    }
+
+    fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
     }
 }
 pub struct Hash1024([u8; 128]);
 impl HashData<16, 32> for Hash1024 {
-    fn as_64s(&mut self) -> &mut [u64; 16] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0);
-        }
+    unsafe fn as_64s(&mut self) -> &mut [u64; 16] {
+        std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0)
     }
 
-    fn as_32s(&mut self) -> &mut [u32; 32] {
-        unsafe {
-            return std::mem::transmute::<&mut [u8; 128], &mut [u32; 32]>(&mut self.0);
-        }
+    unsafe fn as_32s(&mut self) -> &mut [u32; 32] {
+        std::mem::transmute::<&mut [u8; 128], &mut [u32; 32]>(&mut self.0)
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.0.as_mut_ptr()
+    }
+
+    fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
     }
 }
 
@@ -106,11 +114,15 @@ fn fishhash_kernel(context: &Context, seed: &[u8; 64]) -> [u8; 32] {
     todo!()
 }
 
-fn build_light_cache(cache: &mut [Hash512; LIGHT_CACHE_NUM_ITEMS]) -> () {
-    let mut item: Hash512 = cache[0];
+unsafe fn build_light_cache(cache: &mut [Hash512; LIGHT_CACHE_NUM_ITEMS]) -> () {
+    // let mut item: Hash512 = Hash512([0; 64]);
+    let mut item = [0u64; 8];
+    keccak(item, 512, &SEED, std::mem::size_of_val(&SEED));
+    cache[0] = Hash512(item);
 
-    unsafe {
-        keccak(item.as_64s(), 512, &mut SEED, 512);
+    for i in 0..LIGHT_CACHE_NUM_ITEMS {
+        let size = std::mem::size_of_val(&item);
+        keccak(item, 512, &item, size);
     }
 
     todo!()

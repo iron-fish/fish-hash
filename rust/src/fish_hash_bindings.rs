@@ -41,4 +41,5 @@ extern "C" {
     pub fn get_context(full: bool) -> *mut fishhash_context;
     pub fn prebuild_dataset(arg1: *mut fishhash_context, numThreads: u32);
     pub fn hash(output: *mut u8, ctx: *const fishhash_context, header: *const u8, header_size: u64);
+    pub fn keccak2(out: *mut u64, bits: isize, data: *const u8, size: isize);
 }
