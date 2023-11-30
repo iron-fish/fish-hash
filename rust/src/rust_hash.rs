@@ -4,7 +4,7 @@ use crate::keccak::keccak;
 
 // TODO: These are static in the c++ version
 const FNV_PRIME: u32 = 0x01000193;
-const FULL_DATASET_ITEM_PARENTS: i32 = 512;
+const FULL_DATASET_ITEM_PARENTS: u32 = 512;
 const NUM_DATASET_ACCESSES: i32 = 32;
 const LIGHT_CACHE_ROUNDS: i32 = 3;
 
@@ -142,8 +142,103 @@ pub unsafe fn get_context(full: bool) -> Context {
     Context::new(full)
 }
 
-pub fn prebuild_dataset(context: &Context, num_threads: u32) {
-    todo!()
+pub unsafe fn prebuild_dataset(full_data_set: Box<[Hash1024]>, light_cache: Box<[Hash512]>) {
+    build_dataset_segment(full_data_set, &light_cache);
+
+    // match context.full_dataset {
+    //     None => (),
+    //     Some(full_data_set) => {
+            
+    //         let chunk_size = (full_data_set.len() + (num_threads - 1)) / num_threads;
+
+    //         full_data_set.par_chunks_mut(chunk_size).for_each(|chunk| {
+    //             std::thread::spawn(move || {
+    //                 build_dataset_segment(chunk);
+    //             });
+    //         });
+
+    //         threads_to_join = threads.collect();
+    //     }
+    // }
+}
+
+pub unsafe fn build_dataset_segment(mut full_dataset: Box<[Hash1024]>, light_cache: &Box<[Hash512]>) {
+    for i in 0..(full_dataset.len() - 1) {
+        full_dataset[i] = calculate_dataset_item_1024(light_cache, i);
+    }
+}
+
+fn fnv1(u: u32, v: u32) -> u32 {
+    (u * FNV_PRIME) ^ v
+}
+
+unsafe fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
+    let mut r = Hash512([0; 64]);
+    let r32s = r.as_32s_mut();
+
+    for (i, item) in r32s.iter_mut().enumerate() { //TODO: pretty sure we will always have 16 of them
+        *item = fnv1(u.as_32s()[i], v.as_32s()[i])
+    }
+
+    r
+}
+
+pub struct ItemState<'a> {
+    pub seed: u32,
+    pub mix: Hash512,
+    pub light_cache: &'a Box<[Hash512]>,
+}
+
+impl <'a>ItemState<'a> {
+    pub unsafe fn new(light_cache: &'a Box<[Hash512]>, index: usize) -> Self {
+        let mut mix = light_cache[index % LIGHT_CACHE_NUM_ITEMS];
+        let seed = index as u32; // TODO: Do we need to cast here??
+        mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
+
+        let data_ptr = mix.as_ptr();
+        keccak(mix.as_64s_mut(), 512, data_ptr, 64);
+
+        ItemState { seed, mix, light_cache }
+    }
+
+    pub unsafe fn update(&mut self, round: u32) {
+        let num_words: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
+        let index: usize = (round % num_words) as usize; // TODO: may need usize here??
+		let t: u32 = fnv1(self.seed ^ round, self.mix.as_32s()[index]);
+        let parent_index = (t as usize) % LIGHT_CACHE_NUM_ITEMS; // TODO: casting u32 to usize here too
+        self.mix = fnv1_512(self.mix, self.light_cache[parent_index]);
+    }
+
+    pub unsafe fn _final(&mut self) -> Hash512 {
+        let data_ptr = self.mix.as_ptr();
+        keccak(self.mix.as_64s_mut(), 512, data_ptr, 64);
+
+        self.mix.clone()
+    }
+}
+
+unsafe fn calculate_dataset_item_1024(light_cache: &Box<[Hash512]>, index: usize) -> Hash1024 {
+    let mut item0 = ItemState::new(light_cache, index * 2);
+    let mut item1 = ItemState::new(light_cache, index * 2 + 1);
+
+    for j in 0..FULL_DATASET_ITEM_PARENTS {
+        item0.update(j);
+        item1.update(j);
+    }
+
+    // TODO: remove unnecessary copies here
+    let dataset_item: [u8; 128] = {
+        let final0 = item0._final().0;
+        let final1 = item1._final().0;
+
+        let mut whole: [u8; 128] = [0; 128];
+        let (one, two) = whole.split_at_mut(final0.len());
+        one.copy_from_slice(&final0);
+        two.copy_from_slice(&final1);
+        whole
+    };
+    
+    Hash1024(dataset_item)
 }
 
 // TODO: Probably want to return instead of using an out-variable
