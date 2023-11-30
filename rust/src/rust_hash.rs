@@ -81,7 +81,7 @@ impl HashData<8, 16> for Hash512 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Hash1024([u8; 128]);
 impl HashData<16, 32> for Hash1024 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 16] {
@@ -109,53 +109,37 @@ impl HashData<16, 32> for Hash1024 {
     }
 }
 
-pub struct Context<'a> {
-    data: Box<[Hash512]>,
-    // pub light_cache: Box<[Hash512; LIGHT_CACHE_NUM_ITEMS]>,
-    // pub full_dataset: Option<Box<[Hash1024; FULL_DATASET_NUM_ITEMS]>>,
-    pub light_cache: &'a mut [Hash512],
-    pub full_dataset: Option<&'a mut [Hash1024]>,
+pub struct Context {
+    pub light_cache: Box<[Hash512]>,
+    pub full_dataset: Option<Box<[Hash1024]>>,
 }
 
-pub unsafe fn get_context<'a>(full: bool) -> Context<'a> {
-    // TODO: mutex
+impl Context {
+    unsafe fn new(full: bool) -> Self {
+        // TODO: mutex
 
-    // Instantiate the memory on the heap as a vec, convert it to a boxed slice,
-    // then convince rust it's a boxed array.
-    // Using `Box::new([...])` will still instantiate the array on the stack,
-    // THEN move it to the heap which obviously is not going to work
-    // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
-    // let data = vec![Hash512([0; 64]); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice();
-    let mut data = if full {
-        // The full dataset expects FULL_DATASET_NUM_ITEMS Hash1024s, but that
-        // makes the typing here pretty obnoxious so lets just double the size
-        // and cast them as Hash512s
-        vec![Hash512([0; 64]); FULL_DATASET_NUM_ITEMS * 2].into_boxed_slice()
-    } else {
-        vec![Hash512([0; 64]); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice()
-    };
+        // Vec into boxed sliced, because you can't allocate an array directly on
+        // the heap in rust
+        // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
+        let mut light_cache = vec![Hash512([0; 64]); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice();
+        build_light_cache(&mut light_cache);
 
-    let light_cache_ptr: *mut Hash512 = data.as_mut_ptr();
-    let full_dataset_ptr: *mut Hash1024 = data.as_mut_ptr().cast();
+        let full_dataset = if full {
+            Some(vec![Hash1024([0; 128]); FULL_DATASET_NUM_ITEMS].into_boxed_slice())
+        } else {
+            None
+        };
 
-    let light_cache = std::slice::from_raw_parts_mut(light_cache_ptr, LIGHT_CACHE_NUM_ITEMS);
-
-    build_light_cache(light_cache);
-
-    let full_dataset = if full {
-        Some(std::slice::from_raw_parts_mut(
-            full_dataset_ptr,
-            FULL_DATASET_NUM_ITEMS,
-        ))
-    } else {
-        None
-    };
-
-    Context {
-        data,
-        light_cache,
-        full_dataset,
+        Context {
+            light_cache,
+            full_dataset,
+        }
     }
+}
+
+// TODO: keeping this function around to mirror the C++ API 1:1 for now
+pub unsafe fn get_context(full: bool) -> Context {
+    Context::new(full)
 }
 
 pub fn prebuild_dataset(context: &Context, num_threads: u32) {
