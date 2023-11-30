@@ -148,7 +148,7 @@ pub unsafe fn prebuild_dataset(full_data_set: Box<[Hash1024]>, light_cache: Box<
     // match context.full_dataset {
     //     None => (),
     //     Some(full_data_set) => {
-            
+
     //         let chunk_size = (full_data_set.len() + (num_threads - 1)) / num_threads;
 
     //         full_data_set.par_chunks_mut(chunk_size).for_each(|chunk| {
@@ -162,7 +162,10 @@ pub unsafe fn prebuild_dataset(full_data_set: Box<[Hash1024]>, light_cache: Box<
     // }
 }
 
-pub unsafe fn build_dataset_segment(mut full_dataset: Box<[Hash1024]>, light_cache: &Box<[Hash512]>) {
+pub unsafe fn build_dataset_segment(
+    mut full_dataset: Box<[Hash1024]>,
+    light_cache: &Box<[Hash512]>,
+) {
     for i in 0..(full_dataset.len() - 1) {
         full_dataset[i] = calculate_dataset_item_1024(light_cache, i);
     }
@@ -176,7 +179,8 @@ unsafe fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
     let mut r = Hash512([0; 64]);
     let r32s = r.as_32s_mut();
 
-    for (i, item) in r32s.iter_mut().enumerate() { //TODO: pretty sure we will always have 16 of them
+    for (i, item) in r32s.iter_mut().enumerate() {
+        //TODO: pretty sure we will always have 16 of them
         *item = fnv1(u.as_32s()[i], v.as_32s()[i])
     }
 
@@ -189,7 +193,7 @@ pub struct ItemState<'a> {
     pub light_cache: &'a Box<[Hash512]>,
 }
 
-impl <'a>ItemState<'a> {
+impl<'a> ItemState<'a> {
     pub unsafe fn new(light_cache: &'a Box<[Hash512]>, index: usize) -> Self {
         let mut mix = light_cache[index % LIGHT_CACHE_NUM_ITEMS];
         let seed = index as u32; // TODO: Do we need to cast here??
@@ -198,13 +202,17 @@ impl <'a>ItemState<'a> {
         let data_ptr = mix.as_ptr();
         keccak(mix.as_64s_mut(), 512, data_ptr, 64);
 
-        ItemState { seed, mix, light_cache }
+        ItemState {
+            seed,
+            mix,
+            light_cache,
+        }
     }
 
     pub unsafe fn update(&mut self, round: u32) {
         let num_words: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
         let index: usize = (round % num_words) as usize; // TODO: may need usize here??
-		let t: u32 = fnv1(self.seed ^ round, self.mix.as_32s()[index]);
+        let t: u32 = fnv1(self.seed ^ round, self.mix.as_32s()[index]);
         let parent_index = (t as usize) % LIGHT_CACHE_NUM_ITEMS; // TODO: casting u32 to usize here too
         self.mix = fnv1_512(self.mix, self.light_cache[parent_index]);
     }
@@ -237,23 +245,76 @@ unsafe fn calculate_dataset_item_1024(light_cache: &Box<[Hash512]>, index: usize
         two.copy_from_slice(&final1);
         whole
     };
-    
+
     Hash1024(dataset_item)
 }
 
 // TODO: Probably want to return instead of using an out-variable
-pub fn hash(mut output: &[u8], context: &Context, header: &[u8]) {
-    let mut seed: [u8; 64] = [0; 64];
+pub unsafe fn hash(output: &mut [u8], context: &Context, header: &[u8]) {
+    let mut seed: Hash512 = Hash512([0; 64]);
 
     let mut hasher = Hasher::new();
     hasher.update(header);
     let mut output_reader = hasher.finalize_xof();
-    output_reader.fill(&mut seed);
+    output_reader.fill(&mut seed.0);
 
     let mix_hash = fishhash_kernel(context, &seed);
+
+    let mut final_data: [u8; 96] = [0; 96];
+    final_data[0..64].copy_from_slice(&seed.0);
+    final_data[64..].copy_from_slice(&mix_hash.0);
+
+    let hash = blake3::hash(&final_data);
+    output.copy_from_slice(hash.as_bytes());
 }
 
-fn fishhash_kernel(context: &Context, seed: &[u8; 64]) -> [u8; 32] {
+unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
+    let index_limit: u32 = FULL_DATASET_NUM_ITEMS as u32;
+    let seed_init = seed.as_32s()[0];
+
+    // TODO: From trait for Hash1024?
+    let mut mix: Hash1024 = Hash1024([0; 128]);
+    mix.0[0..64].copy_from_slice(&seed.0);
+    mix.0.copy_within(0..64, 64);
+
+    for i in 0..NUM_DATASET_ACCESSES as usize {
+        // Calculate new fetching indexes
+        let p0: u32 = mix.as_32s()[0] % index_limit;
+        let p1: u32 = mix.as_32s()[4] % index_limit;
+        let p2: u32 = mix.as_32s()[8] % index_limit;
+
+        let fetch0 = lookup(context, p0);
+        let mut fetch1 = lookup(context, p1);
+        let mut fetch2 = lookup(context, p2);
+
+        // Modify fetch1 and fetch2
+        for j in 0..32 {
+            fetch1.as_32s_mut()[i] = fnv1(mix.as_32s()[j], fetch1.as_32s()[j]);
+            fetch2.as_32s_mut()[j] = mix.as_32s()[j] ^ fetch2.as_32s()[j];
+        }
+
+        // Final computation of new mix
+        for j in 0..16 {
+            mix.as_64s_mut()[j] = fetch0.as_64s()[j] * fetch1.as_64s()[j] + fetch2.as_64s()[j];
+        }
+    }
+
+    // Collapse the result into 32 bytes
+    let mut mix_hash = Hash256([0; 32]);
+    let num_words = std::mem::size_of_val(&mix) / std::mem::size_of::<u32>();
+
+    // TODO: Not 100% sure this is the same behavior
+    for i in (0..num_words).step_by(4) {
+        let h1 = fnv1(mix.as_32s()[i], mix.as_32s()[i + 1]);
+        let h2 = fnv1(h1, mix.as_32s()[i + 2]);
+        let h3 = fnv1(h2, mix.as_32s()[i + 3]);
+        mix_hash.as_32s_mut()[i / 4] = h3;
+    }
+
+    mix_hash
+}
+
+fn lookup(context: &Context, index: u32) -> Hash1024 {
     todo!()
 }
 
