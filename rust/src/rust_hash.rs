@@ -279,13 +279,13 @@ unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
 
     for i in 0..NUM_DATASET_ACCESSES as usize {
         // Calculate new fetching indexes
-        let p0: u32 = mix.as_32s()[0] % index_limit;
-        let p1: u32 = mix.as_32s()[4] % index_limit;
-        let p2: u32 = mix.as_32s()[8] % index_limit;
+        let p0 = mix.as_32s()[0] % index_limit;
+        let p1 = mix.as_32s()[4] % index_limit;
+        let p2 = mix.as_32s()[8] % index_limit;
 
-        let fetch0 = lookup(context, p0);
-        let mut fetch1 = lookup(context, p1);
-        let mut fetch2 = lookup(context, p2);
+        let fetch0 = lookup(context, p0 as usize);
+        let mut fetch1 = lookup(context, p1 as usize);
+        let mut fetch2 = lookup(context, p2 as usize);
 
         // Modify fetch1 and fetch2
         for j in 0..32 {
@@ -314,8 +314,18 @@ unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
     mix_hash
 }
 
-fn lookup(context: &Context, index: u32) -> Hash1024 {
-    todo!()
+unsafe fn lookup(context: &Context, index: usize) -> Hash1024 {
+    match &context.full_dataset {
+        Some(dataset) => {
+            let mut item = dataset[index];
+            if item.as_64s()[0] == 0 {
+                item = calculate_dataset_item_1024(&context.light_cache, index);
+            }
+
+            return item;
+        }
+        None => return calculate_dataset_item_1024(&context.light_cache, index),
+    }
 }
 
 unsafe fn build_light_cache(cache: &mut [Hash512]) {
