@@ -82,7 +82,7 @@ impl HashData<8, 16> for Hash512 {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Hash1024([u8; 128]);
+pub struct Hash1024(pub [u8; 128]);
 impl HashData<16, 32> for Hash1024 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 16] {
         std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0)
@@ -142,32 +142,45 @@ pub unsafe fn get_context(full: bool) -> Context {
     Context::new(full)
 }
 
-pub unsafe fn prebuild_dataset(full_data_set: Box<[Hash1024]>, light_cache: Box<[Hash512]>) {
-    build_dataset_segment(full_data_set, &light_cache);
+pub unsafe fn prebuild_dataset(
+    full_dataset: &mut Box<[Hash1024]>,
+    light_cache: Box<[Hash512]>,
+    num_threads: usize,
+) {
+    if num_threads > 1 {
+        std::thread::scope(|scope| {
+            let batch_size = full_dataset.len() / num_threads;
 
-    // match context.full_dataset {
-    //     None => (),
-    //     Some(full_data_set) => {
+            let mut threads = Vec::with_capacity(num_threads);
 
-    //         let chunk_size = (full_data_set.len() + (num_threads - 1)) / num_threads;
+            let mut chunks = full_dataset.chunks_mut(batch_size);
 
-    //         full_data_set.par_chunks_mut(chunk_size).for_each(|chunk| {
-    //             std::thread::spawn(move || {
-    //                 build_dataset_segment(chunk);
-    //             });
-    //         });
+            let light_cache_slice = &light_cache[0..];
 
-    //         threads_to_join = threads.collect();
-    //     }
-    // }
+            for (index, chunk) in chunks.enumerate() {
+                let start = index * batch_size;
+
+                let thread_handle =
+                    scope.spawn(move || build_dataset_segment(chunk, &light_cache_slice, start));
+                threads.push(thread_handle);
+            }
+
+            for handle in threads {
+                handle.join();
+            }
+        });
+    } else {
+        build_dataset_segment(&mut full_dataset[0..], &light_cache, 0);
+    }
 }
 
 pub unsafe fn build_dataset_segment(
-    mut full_dataset: Box<[Hash1024]>,
-    light_cache: &Box<[Hash512]>,
+    dataset_slice: &mut [Hash1024],
+    light_cache: &[Hash512],
+    offset: usize,
 ) {
-    for i in 0..(full_dataset.len() - 1) {
-        full_dataset[i] = calculate_dataset_item_1024(light_cache, i);
+    for (index, item) in dataset_slice.iter_mut().enumerate() {
+        *item = calculate_dataset_item_1024(light_cache, offset + index);
     }
 }
 
@@ -190,11 +203,11 @@ unsafe fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
 pub struct ItemState<'a> {
     pub seed: u32,
     pub mix: Hash512,
-    pub light_cache: &'a Box<[Hash512]>,
+    pub light_cache: &'a [Hash512],
 }
 
 impl<'a> ItemState<'a> {
-    pub unsafe fn new(light_cache: &'a Box<[Hash512]>, index: usize) -> Self {
+    pub unsafe fn new(light_cache: &'a [Hash512], index: usize) -> Self {
         let mut mix = light_cache[index % LIGHT_CACHE_NUM_ITEMS];
         let seed = index as u32; // TODO: Do we need to cast here??
         mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
@@ -225,7 +238,7 @@ impl<'a> ItemState<'a> {
     }
 }
 
-unsafe fn calculate_dataset_item_1024(light_cache: &Box<[Hash512]>, index: usize) -> Hash1024 {
+unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash1024 {
     let mut item0 = ItemState::new(light_cache, index * 2);
     let mut item1 = ItemState::new(light_cache, index * 2 + 1);
 

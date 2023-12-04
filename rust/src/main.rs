@@ -2,8 +2,6 @@ use std::time::Instant;
 
 use fish_hash_bindings::keccak2;
 
-use crate::rust_hash::Hash512;
-
 mod fish_hash_bindings;
 mod keccak;
 mod rust_hash;
@@ -13,8 +11,8 @@ fn main() {
         // compare_hash();
 
         compare_keccak();
-
         compare_get_context_light();
+        compare_prebuild_dataset();
     }
 }
 
@@ -46,6 +44,42 @@ unsafe fn compare_get_context_light() {
         "get_context(false): Rust took {:?} milliseconds",
         elapsed_r.as_millis()
     );
+}
+
+unsafe fn compare_prebuild_dataset() {
+    let num_threads = 8;
+
+    let context_c = fish_hash_bindings::get_context(true);
+
+    let start_c = Instant::now();
+    fish_hash_bindings::prebuild_dataset(context_c, num_threads);
+    let elapsed_c = start_c.elapsed();
+
+    println!(
+        "prebuild_dataset: C++  took {:?} milliseconds",
+        elapsed_c.as_millis()
+    );
+
+    let context_r = rust_hash::get_context(true);
+    let mut dataset = context_r.full_dataset.unwrap();
+
+    let start_r = Instant::now();
+    rust_hash::prebuild_dataset(&mut dataset, context_r.light_cache, num_threads as usize);
+    let elapsed_r = start_r.elapsed();
+
+    println!(
+        "prebuild_dataset: Rust took {:?} milliseconds",
+        elapsed_r.as_millis()
+    );
+
+    for (i, hash1024) in dataset.iter().enumerate() {
+        assert_eq!(
+            context_c.read().full_dataset.add(i).read().bytes,
+            hash1024.0,
+            "index {}",
+            i
+        );
+    }
 }
 
 unsafe fn compare_keccak() {
