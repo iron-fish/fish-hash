@@ -10,7 +10,9 @@ fn main() {
     unsafe {
         compare_keccak();
         compare_get_context_light();
-        compare_hash();
+        compare_validation();
+        compare_hash(false);
+        // compare_hash(true);
         // compare_prebuild_dataset();
     }
 }
@@ -59,11 +61,15 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_c.as_millis()
     );
 
-    let context_r = rust_hash::get_context(true);
+    let mut context_r = rust_hash::get_context(true);
     let mut dataset = context_r.full_dataset.unwrap();
 
     let start_r = Instant::now();
-    rust_hash::prebuild_dataset(&mut dataset, context_r.light_cache, num_threads as usize);
+    rust_hash::prebuild_dataset(
+        &mut dataset,
+        &mut context_r.light_cache,
+        num_threads as usize,
+    );
     let elapsed_r = start_r.elapsed();
 
     println!(
@@ -104,7 +110,7 @@ unsafe fn compare_keccak() {
     println!("keccak: Rust took {:?} nanoseconds", elapsed_r.as_nanos());
 }
 
-unsafe fn compare_hash() {
+unsafe fn compare_validation() {
     let inputs = vec![
         "dsfdsfsdgdaafsd",
         "the quick brown fox jumps over the lazy dog",
@@ -112,8 +118,57 @@ unsafe fn compare_hash() {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
     ];
 
+    let context_c = fish_hash_bindings::get_context(false);
+    let mut context_r = rust_hash::get_context(false);
+
+    for input in inputs {
+        println!("Validating '{:?}'", input);
+
+        let start_c = Instant::now();
+        let output_c = hash_c(context_c, input);
+        let elapsed_c = start_c.elapsed();
+
+        // Print the hash as a hex string
+        println!("C++ : {:02X?}", output_c);
+
+        let start_r = Instant::now();
+        let mut output_r = [0u8; 32];
+        rust_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
+        let elapsed_r = start_r.elapsed();
+
+        println!("Rust: {:02X?}", output_r);
+
+        println!(
+            "hash(light): C++  took {:?} microseconds",
+            elapsed_c.as_micros()
+        );
+        println!(
+            "hash(light): Rust took {:?} microseconds",
+            elapsed_r.as_micros()
+        );
+
+        assert_eq!(output_c, output_r);
+    }
+}
+
+unsafe fn compare_hash(prebuild: bool) {
+    let inputs = vec![
+        "dsfdsfsdgdaafsd",
+        "the quick brown fox jumps over the lazy dog",
+        "zxbcnmv,ahjsdklfeiwuopqr78309241-turhgeiwaov89b76zxcajhsdklfb423qkjlr",
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+    ];
+
+    let num_threads = 8;
+
     let context_c = fish_hash_bindings::get_context(true);
     let mut context_r = rust_hash::get_context(true);
+    let dataset = context_r.full_dataset.as_mut().unwrap();
+
+    if prebuild {
+        fish_hash_bindings::prebuild_dataset(context_c, num_threads);
+        rust_hash::prebuild_dataset(dataset, &context_r.light_cache, num_threads as usize);
+    }
 
     for input in inputs {
         println!("Hashing '{:?}'", input);
@@ -132,8 +187,8 @@ unsafe fn compare_hash() {
 
         println!("Rust: {:02X?}", output_r);
 
-        println!("hash: C++  took {:?} milliseconds", elapsed_c.as_millis());
-        println!("hash: Rust took {:?} milliseconds", elapsed_r.as_millis());
+        println!("hash: C++  took {:?} microseconds", elapsed_c.as_micros());
+        println!("hash: Rust took {:?} microseconds", elapsed_r.as_micros());
 
         assert_eq!(output_c, output_r);
 

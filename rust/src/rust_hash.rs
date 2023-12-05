@@ -144,7 +144,7 @@ pub unsafe fn get_context(full: bool) -> Context {
 
 pub unsafe fn prebuild_dataset(
     full_dataset: &mut Box<[Hash1024]>,
-    light_cache: Box<[Hash512]>,
+    light_cache: &Box<[Hash512]>,
     num_threads: usize,
 ) {
     if num_threads > 1 {
