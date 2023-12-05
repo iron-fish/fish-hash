@@ -263,7 +263,7 @@ unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> 
 }
 
 // TODO: Probably want to return instead of using an out-variable
-pub unsafe fn hash(output: &mut [u8], context: &Context, header: &[u8]) {
+pub unsafe fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
     let mut seed: Hash512 = Hash512([0; 64]);
 
     let mut hasher = Hasher::new();
@@ -281,7 +281,7 @@ pub unsafe fn hash(output: &mut [u8], context: &Context, header: &[u8]) {
     output.copy_from_slice(hash.as_bytes());
 }
 
-unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
+unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
     let index_limit: u32 = FULL_DATASET_NUM_ITEMS as u32;
     let seed_init = seed.as_32s()[0];
 
@@ -327,15 +327,15 @@ unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
     mix_hash
 }
 
-unsafe fn lookup(context: &Context, index: usize) -> Hash1024 {
-    match &context.full_dataset {
+unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
+    match &mut context.full_dataset {
         Some(dataset) => {
-            let mut item = dataset[index];
+            let item = &mut dataset[index];
             if item.as_64s()[0] == 0 {
-                item = calculate_dataset_item_1024(&context.light_cache, index);
+                *item = calculate_dataset_item_1024(&context.light_cache, index);
             }
 
-            return item;
+            return *item;
         }
         None => return calculate_dataset_item_1024(&context.light_cache, index),
     }

@@ -112,11 +112,13 @@ unsafe fn compare_hash() {
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
     ];
 
+    let context_c = fish_hash_bindings::get_context(true);
+    let mut context_r = rust_hash::get_context(true);
+
     for input in inputs {
         println!("Hashing '{:?}'", input);
 
         let start_c = Instant::now();
-        let context_c = fish_hash_bindings::get_context(true);
         let output_c = hash_c(context_c, input);
         let elapsed_c = start_c.elapsed();
 
@@ -124,9 +126,8 @@ unsafe fn compare_hash() {
         println!("C++ : {:02X?}", output_c);
 
         let start_r = Instant::now();
-        let context_r = rust_hash::get_context(true);
         let mut output_r = [0u8; 32];
-        rust_hash::hash(&mut output_r, &context_r, input.as_bytes());
+        rust_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
         let elapsed_r = start_r.elapsed();
 
         println!("Rust: {:02X?}", output_r);
@@ -135,6 +136,15 @@ unsafe fn compare_hash() {
         println!("hash: Rust took {:?} milliseconds", elapsed_r.as_millis());
 
         assert_eq!(output_c, output_r);
+
+        for (i, hash1024) in context_r.full_dataset.as_ref().unwrap().iter().enumerate() {
+            assert_eq!(
+                context_c.read().full_dataset.add(i).read().bytes,
+                hash1024.0,
+                "index {}",
+                i
+            );
+        }
     }
 }
 
