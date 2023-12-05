@@ -8,11 +8,10 @@ mod rust_hash;
 
 fn main() {
     unsafe {
-        // compare_hash();
-
         compare_keccak();
         compare_get_context_light();
-        compare_prebuild_dataset();
+        compare_hash();
+        // compare_prebuild_dataset();
     }
 }
 
@@ -106,15 +105,40 @@ unsafe fn compare_keccak() {
 }
 
 unsafe fn compare_hash() {
-    let input = "dsfdsfsdgdaafsd";
-    let context = fish_hash_bindings::get_context(true);
-    let output = hash(context, input);
+    let inputs = vec![
+        "dsfdsfsdgdaafsd",
+        "the quick brown fox jumps over the lazy dog",
+        "zxbcnmv,ahjsdklfeiwuopqr78309241-turhgeiwaov89b76zxcajhsdklfb423qkjlr",
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+    ];
 
-    // Print the hash as a hex string
-    println!("{:02X?}", output);
+    for input in inputs {
+        println!("Hashing '{:?}'", input);
+
+        let start_c = Instant::now();
+        let context_c = fish_hash_bindings::get_context(true);
+        let output_c = hash_c(context_c, input);
+        let elapsed_c = start_c.elapsed();
+
+        // Print the hash as a hex string
+        println!("C++ : {:02X?}", output_c);
+
+        let start_r = Instant::now();
+        let context_r = rust_hash::get_context(true);
+        let mut output_r = [0u8; 32];
+        rust_hash::hash(&mut output_r, &context_r, input.as_bytes());
+        let elapsed_r = start_r.elapsed();
+
+        println!("Rust: {:02X?}", output_r);
+
+        println!("hash: C++  took {:?} milliseconds", elapsed_c.as_millis());
+        println!("hash: Rust took {:?} milliseconds", elapsed_r.as_millis());
+
+        assert_eq!(output_c, output_r);
+    }
 }
 
-unsafe fn hash(context: *mut fish_hash_bindings::fishhash_context, input: &str) -> [u8; 32] {
+unsafe fn hash_c(context: *mut fish_hash_bindings::fishhash_context, input: &str) -> [u8; 32] {
     let input_bytes = input.as_bytes();
     let mut output: [u8; 32] = [0; 32];
 

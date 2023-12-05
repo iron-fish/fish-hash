@@ -302,7 +302,7 @@ unsafe fn fishhash_kernel(context: &Context, seed: &Hash512) -> Hash256 {
 
         // Modify fetch1 and fetch2
         for j in 0..32 {
-            fetch1.as_32s_mut()[i] = fnv1(mix.as_32s()[j], fetch1.as_32s()[j]);
+            fetch1.as_32s_mut()[j] = fnv1(mix.as_32s()[j], fetch1.as_32s()[j]);
             fetch2.as_32s_mut()[j] = mix.as_32s()[j] ^ fetch2.as_32s()[j];
         }
 
