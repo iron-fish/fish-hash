@@ -110,7 +110,7 @@ unsafe fn compare_keccak() {
 
     let start_r = Instant::now();
     let mut out_r: [u8; 64] = [0; 64];
-    keccak::keccak(&mut out_r, 512, input.as_ptr(), input.len());
+    keccak::keccak(&mut out_r, 512, &input, input.len());
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", out_r);

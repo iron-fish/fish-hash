@@ -1,7 +1,15 @@
 use keccak::f1600;
 use std::mem::size_of;
 
-pub unsafe fn keccak(
+pub unsafe fn keccak_in_place(data: &mut [u8], bits: usize, mut size: usize) {
+    _keccak(data, bits, data.as_ptr(), size)
+}
+
+pub unsafe fn keccak(out: &mut [u8], bits: usize, data: &[u8], mut size: usize) {
+    _keccak(out, bits, data.as_ptr(), size)
+}
+
+unsafe fn _keccak(
     out: &mut [u8],
     bits: usize, // TODO: This can probably be calculated from somewhere, or hard-coded
     data_ptr: *const u8,

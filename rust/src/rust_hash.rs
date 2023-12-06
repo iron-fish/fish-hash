@@ -1,6 +1,6 @@
 use blake3::Hasher;
 
-use crate::keccak::keccak;
+use crate::keccak::{keccak, keccak_in_place};
 
 // TODO: These are static in the c++ version
 const FNV_PRIME: u32 = 0x01000193;
@@ -20,7 +20,6 @@ pub trait HashData<const U64_SIZE: usize, const U32_SIZE: usize> {
     unsafe fn as_32s_mut(&mut self) -> &mut [u32; U32_SIZE];
     unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
     unsafe fn as_32s(&self) -> &[u32; U32_SIZE];
-    fn as_ptr(&self) -> *const u8;
 }
 
 #[derive(Debug)]
@@ -40,10 +39,6 @@ impl HashData<4, 8> for Hash256 {
 
     unsafe fn as_32s(&self) -> &[u32; 8] {
         std::mem::transmute::<&[u8; 32], &[u32; 8]>(&self.0)
-    }
-
-    fn as_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
     }
 }
 
@@ -66,10 +61,6 @@ impl HashData<8, 16> for Hash512 {
     unsafe fn as_32s(&self) -> &[u32; 16] {
         std::mem::transmute::<&[u8; 64], &[u32; 16]>(&self.0)
     }
-
-    fn as_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -89,10 +80,6 @@ impl HashData<16, 32> for Hash1024 {
 
     unsafe fn as_32s(&self) -> &[u32; 32] {
         std::mem::transmute::<&[u8; 128], &[u32; 32]>(&self.0)
-    }
-
-    fn as_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
     }
 }
 
@@ -199,8 +186,7 @@ impl<'a> ItemState<'a> {
         let seed = index as u32; // TODO: Do we need to cast here??
         mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
 
-        let data_ptr = mix.as_ptr();
-        keccak(&mut mix.0, 512, data_ptr, 64);
+        keccak_in_place(&mut mix.0, 512, 64);
 
         ItemState {
             seed,
@@ -218,8 +204,7 @@ impl<'a> ItemState<'a> {
     }
 
     pub unsafe fn _final(&mut self) -> Hash512 {
-        let data_ptr = self.mix.as_ptr();
-        keccak(&mut self.mix.0, 512, data_ptr, 64);
+        keccak_in_place(&mut self.mix.0, 512, 64);
 
         self.mix.clone()
     }
@@ -330,18 +315,12 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
 
 unsafe fn build_light_cache(cache: &mut [Hash512]) {
     let mut item: Hash512 = Hash512([0; 64]);
-    keccak(
-        &mut item.0,
-        512,
-        SEED.as_ptr(),
-        std::mem::size_of_val(&SEED),
-    );
+    keccak(&mut item.0, 512, &SEED.0, std::mem::size_of_val(&SEED));
     cache[0] = item;
 
     for i in 1..LIGHT_CACHE_NUM_ITEMS {
         let size = std::mem::size_of_val(&item);
-        let ptr = item.0.as_ptr();
-        keccak(&mut item.0, 512, ptr, size);
+        keccak_in_place(&mut item.0, 512, size);
         cache[i] = item;
     }
 
@@ -356,12 +335,7 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
             let x: Hash512 = bitwise_xor(&cache[v], &cache[w]);
-            keccak(
-                &mut cache[i].0,
-                512,
-                x.as_ptr(),
-                std::mem::size_of::<Hash512>(),
-            );
+            keccak(&mut cache[i].0, 512, &x.0, std::mem::size_of::<Hash512>());
         }
     }
 }
