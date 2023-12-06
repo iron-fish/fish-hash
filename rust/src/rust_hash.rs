@@ -20,7 +20,6 @@ pub trait HashData<const U64_SIZE: usize, const U32_SIZE: usize> {
     unsafe fn as_32s_mut(&mut self) -> &mut [u32; U32_SIZE];
     unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
     unsafe fn as_32s(&self) -> &[u32; U32_SIZE];
-    fn as_mut_ptr(&mut self) -> *mut u8;
     fn as_ptr(&self) -> *const u8;
 }
 
@@ -41,10 +40,6 @@ impl HashData<4, 8> for Hash256 {
 
     unsafe fn as_32s(&self) -> &[u32; 8] {
         std::mem::transmute::<&[u8; 32], &[u32; 8]>(&self.0)
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.0.as_mut_ptr()
     }
 
     fn as_ptr(&self) -> *const u8 {
@@ -72,10 +67,6 @@ impl HashData<8, 16> for Hash512 {
         std::mem::transmute::<&[u8; 64], &[u32; 16]>(&self.0)
     }
 
-    fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.0.as_mut_ptr()
-    }
-
     fn as_ptr(&self) -> *const u8 {
         self.0.as_ptr()
     }
@@ -98,10 +89,6 @@ impl HashData<16, 32> for Hash1024 {
 
     unsafe fn as_32s(&self) -> &[u32; 32] {
         std::mem::transmute::<&[u8; 128], &[u32; 32]>(&self.0)
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.0.as_mut_ptr()
     }
 
     fn as_ptr(&self) -> *const u8 {
