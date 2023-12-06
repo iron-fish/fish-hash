@@ -1,13 +1,8 @@
 use keccak::f1600;
 use std::mem::size_of;
 
-use crate::rust_hash::HashData;
-
-// hash512 item;
-// keccak(item.word64s, 512, seed.bytes, sizeof(seed))
-// inline void keccak(uint64_t* out, size_t bits, const uint8_t* data, size_t size)
 pub unsafe fn keccak(
-    out: &mut [u64],
+    out: &mut [u8],
     bits: usize, // TODO: This can probably be calculated from somewhere, or hard-coded
     data_ptr: *const u8,
     mut size: usize,
@@ -57,7 +52,8 @@ pub unsafe fn keccak(
     f1600(&mut state);
 
     for i in 0..(hash_size / WORD_SIZE) {
-        out[i] = state[i].to_le();
+        let index = i * 8;
+        out[index..index + WORD_SIZE].copy_from_slice(&state[i].to_le_bytes());
     }
 }
 

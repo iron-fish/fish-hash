@@ -213,7 +213,7 @@ impl<'a> ItemState<'a> {
         mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
 
         let data_ptr = mix.as_ptr();
-        keccak(mix.as_64s_mut(), 512, data_ptr, 64);
+        keccak(&mut mix.0, 512, data_ptr, 64);
 
         ItemState {
             seed,
@@ -232,7 +232,7 @@ impl<'a> ItemState<'a> {
 
     pub unsafe fn _final(&mut self) -> Hash512 {
         let data_ptr = self.mix.as_ptr();
-        keccak(self.mix.as_64s_mut(), 512, data_ptr, 64);
+        keccak(&mut self.mix.0, 512, data_ptr, 64);
 
         self.mix.clone()
     }
@@ -344,7 +344,7 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
 unsafe fn build_light_cache(cache: &mut [Hash512]) {
     let mut item: Hash512 = Hash512([0; 64]);
     keccak(
-        item.as_64s_mut(),
+        &mut item.0,
         512,
         SEED.as_ptr(),
         std::mem::size_of_val(&SEED),
@@ -354,7 +354,7 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
     for i in 1..LIGHT_CACHE_NUM_ITEMS {
         let size = std::mem::size_of_val(&item);
         let ptr = item.0.as_ptr();
-        keccak(item.as_64s_mut(), 512, ptr, size);
+        keccak(&mut item.0, 512, ptr, size);
         cache[i] = item;
     }
 
@@ -370,7 +370,7 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
 
             let x: Hash512 = bitwise_xor(&cache[v], &cache[w]);
             keccak(
-                cache[i].as_64s_mut(),
+                &mut cache[i].0,
                 512,
                 x.as_ptr(),
                 std::mem::size_of::<Hash512>(),

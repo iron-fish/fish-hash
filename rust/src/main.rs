@@ -90,21 +90,32 @@ unsafe fn compare_prebuild_dataset() {
 unsafe fn compare_keccak() {
     let input = [3u8; 64];
 
+    let mut out_c_bytes = [0u8; 64];
+
     let start_c = Instant::now();
     let mut out_c: [u64; 8] = [0; 8];
-    keccak2(out_c.as_mut_ptr(), 512, input.as_ptr(), 64);
+    keccak2(
+        out_c.as_mut_ptr(),
+        512,
+        input.as_ptr(),
+        input.len() as isize,
+    );
     let elapsed_c = start_c.elapsed();
 
-    println!("{:?}", out_c);
+    for (index, i) in out_c.iter().enumerate() {
+        out_c_bytes[index * 8..index * 8 + 8].copy_from_slice(&i.to_le_bytes());
+    }
+
+    println!("{:?}", out_c_bytes);
 
     let start_r = Instant::now();
-    let mut out_r: [u64; 8] = [0; 8];
-    keccak::keccak(&mut out_r, 512, input.as_ptr(), 64);
+    let mut out_r: [u8; 64] = [0; 64];
+    keccak::keccak(&mut out_r, 512, input.as_ptr(), input.len());
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", out_r);
 
-    assert_eq!(out_c, out_r);
+    assert_eq!(out_c_bytes, out_r);
 
     println!("keccak: C++  took {:?} nanoseconds", elapsed_c.as_nanos());
     println!("keccak: Rust took {:?} nanoseconds", elapsed_r.as_nanos());
