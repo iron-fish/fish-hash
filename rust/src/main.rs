@@ -8,9 +8,9 @@ mod rust_hash;
 
 fn main() {
     unsafe {
-        compare_keccak();
-        compare_get_context_light();
-        compare_validation();
+        // compare_keccak();
+        // compare_get_context_light();
+        // compare_validation();
         compare_hash(false);
         // compare_hash(true);
         // compare_prebuild_dataset();
@@ -110,7 +110,7 @@ unsafe fn compare_keccak() {
 
     let start_r = Instant::now();
     let mut out_r: [u8; 64] = [0; 64];
-    keccak::keccak(&mut out_r, 512, &input, input.len());
+    keccak::keccak(&mut out_r, &input);
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", out_r);

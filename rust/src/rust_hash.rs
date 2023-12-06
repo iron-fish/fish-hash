@@ -186,7 +186,7 @@ impl<'a> ItemState<'a> {
         let seed = index as u32; // TODO: Do we need to cast here??
         mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
 
-        keccak_in_place(&mut mix.0, 512, 64);
+        keccak_in_place(&mut mix.0);
 
         ItemState {
             seed,
@@ -204,7 +204,7 @@ impl<'a> ItemState<'a> {
     }
 
     pub unsafe fn _final(&mut self) -> Hash512 {
-        keccak_in_place(&mut self.mix.0, 512, 64);
+        keccak_in_place(&mut self.mix.0);
 
         self.mix.clone()
     }
@@ -315,12 +315,12 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
 
 unsafe fn build_light_cache(cache: &mut [Hash512]) {
     let mut item: Hash512 = Hash512([0; 64]);
-    keccak(&mut item.0, 512, &SEED.0, std::mem::size_of_val(&SEED));
+    keccak(&mut item.0, &SEED.0);
     cache[0] = item;
 
     for i in 1..LIGHT_CACHE_NUM_ITEMS {
         let size = std::mem::size_of_val(&item);
-        keccak_in_place(&mut item.0, 512, size);
+        keccak_in_place(&mut item.0);
         cache[i] = item;
     }
 
@@ -335,7 +335,7 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
             let x: Hash512 = bitwise_xor(&cache[v], &cache[w]);
-            keccak(&mut cache[i].0, 512, &x.0, std::mem::size_of::<Hash512>());
+            keccak(&mut cache[i].0, &x.0);
         }
     }
 }
