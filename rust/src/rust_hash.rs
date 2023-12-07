@@ -8,8 +8,8 @@ const FULL_DATASET_ITEM_PARENTS: u32 = 512;
 const NUM_DATASET_ACCESSES: i32 = 32;
 const LIGHT_CACHE_ROUNDS: i32 = 3;
 
-const LIGHT_CACHE_NUM_ITEMS: usize = 1179641;
-const FULL_DATASET_NUM_ITEMS: usize = 37748717;
+const LIGHT_CACHE_NUM_ITEMS: u32 = 1179641;
+const FULL_DATASET_NUM_ITEMS: u32 = 37748717;
 const SEED: Hash256 = Hash256([
     0xeb, 0x01, 0x63, 0xae, 0xf2, 0xab, 0x1c, 0x5a, 0x66, 0x31, 0x0c, 0x1c, 0x14, 0xd6, 0x0f, 0x42,
     0x55, 0xa9, 0xb3, 0x9b, 0x0e, 0xdf, 0x26, 0x53, 0x98, 0x44, 0xf1, 0x17, 0xad, 0x67, 0x21, 0x19,
@@ -149,11 +149,12 @@ impl Context {
         // Vec into boxed sliced, because you can't allocate an array directly on
         // the heap in rust
         // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
-        let mut light_cache = vec![Hash512::new(); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice();
+        let mut light_cache =
+            vec![Hash512::new(); LIGHT_CACHE_NUM_ITEMS as usize].into_boxed_slice();
         build_light_cache(&mut light_cache);
 
         let full_dataset = if full {
-            Some(vec![Hash1024::new(); FULL_DATASET_NUM_ITEMS].into_boxed_slice())
+            Some(vec![Hash1024::new(); FULL_DATASET_NUM_ITEMS as usize].into_boxed_slice())
         } else {
             None
         };
@@ -236,13 +237,11 @@ fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
 }
 
 fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash1024 {
-    let num_cache_items = LIGHT_CACHE_NUM_ITEMS as u32; // TODO: Unsafe cast
-
     let seed0 = (index * 2) as u32;
     let seed1 = seed0 + 1;
 
-    let mut mix0 = light_cache[(seed0 % num_cache_items) as usize];
-    let mut mix1 = light_cache[(seed1 % num_cache_items) as usize];
+    let mut mix0 = light_cache[(seed0 % LIGHT_CACHE_NUM_ITEMS) as usize];
+    let mut mix1 = light_cache[(seed1 % LIGHT_CACHE_NUM_ITEMS) as usize];
 
     let mix0_seed = mix0.get_as_u32(0) ^ seed0;
     let mix1_seed = mix1.get_as_u32(0) ^ seed1;
@@ -257,8 +256,8 @@ fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash102
     for j in 0..FULL_DATASET_ITEM_PARENTS {
         let t0 = fnv1(seed0 ^ j, mix0.get_as_u32((j % NUM_WORDS) as usize));
         let t1 = fnv1(seed1 ^ j, mix1.get_as_u32((j % NUM_WORDS) as usize));
-        mix0 = fnv1_512(mix0, light_cache[(t0 % num_cache_items) as usize]);
-        mix1 = fnv1_512(mix1, light_cache[(t1 % num_cache_items) as usize]);
+        mix0 = fnv1_512(mix0, light_cache[(t0 % LIGHT_CACHE_NUM_ITEMS) as usize]);
+        mix1 = fnv1_512(mix1, light_cache[(t1 % LIGHT_CACHE_NUM_ITEMS) as usize]);
     }
 
     keccak_in_place(&mut mix0.0);
@@ -287,18 +286,13 @@ pub fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
 }
 
 fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
-    let index_limit: u32 = FULL_DATASET_NUM_ITEMS as u32;
-
-    // TODO: From trait for Hash1024?
-    let mut mix: Hash1024 = Hash1024::new();
-    mix.0[0..64].copy_from_slice(&seed.0);
-    mix.0.copy_within(0..64, 64);
+    let mut mix = Hash1024::from_512s(seed, seed);
 
     for _ in 0..NUM_DATASET_ACCESSES as usize {
         // Calculate new fetching indexes
-        let p0 = mix.get_as_u32(0) % index_limit;
-        let p1 = mix.get_as_u32(4) % index_limit;
-        let p2 = mix.get_as_u32(8) % index_limit;
+        let p0 = mix.get_as_u32(0) % FULL_DATASET_NUM_ITEMS;
+        let p1 = mix.get_as_u32(4) % FULL_DATASET_NUM_ITEMS;
+        let p2 = mix.get_as_u32(8) % FULL_DATASET_NUM_ITEMS;
 
         let fetch0 = lookup(context, p0 as usize);
         let mut fetch1 = lookup(context, p1 as usize);
@@ -353,7 +347,11 @@ fn build_light_cache(cache: &mut [Hash512]) {
     keccak(&mut item.0, &SEED.0);
     cache[0] = item;
 
-    for cache_item in cache.iter_mut().take(LIGHT_CACHE_NUM_ITEMS).skip(1) {
+    for cache_item in cache
+        .iter_mut()
+        .take(LIGHT_CACHE_NUM_ITEMS as usize)
+        .skip(1)
+    {
         keccak_in_place(&mut item.0);
         *cache_item = item;
     }
@@ -361,16 +359,15 @@ fn build_light_cache(cache: &mut [Hash512]) {
     for _ in 0..LIGHT_CACHE_ROUNDS {
         for i in 0..LIGHT_CACHE_NUM_ITEMS {
             // First index: 4 first bytes of the item as little-endian integer
-            let t: usize = u32::from_le_bytes(cache[i].0[0..4].try_into().unwrap()) as usize;
-            let v: usize = t % LIGHT_CACHE_NUM_ITEMS;
+            let t: u32 = u32::from_le_bytes(cache[i as usize].0[0..4].try_into().unwrap());
+            let v: u32 = t % LIGHT_CACHE_NUM_ITEMS;
 
             // Second index
-            // TODO: Using a usize here will result in different results on 32-bit systems
-            let w: usize =
+            let w: u32 =
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
-            let x: Hash512 = bitwise_xor(&cache[v], &cache[w]);
-            keccak(&mut cache[i].0, &x.0);
+            let x: Hash512 = bitwise_xor(&cache[v as usize], &cache[w as usize]);
+            keccak(&mut cache[i as usize].0, &x.0);
         }
     }
 }
