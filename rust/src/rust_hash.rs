@@ -89,7 +89,7 @@ pub struct Context {
 }
 
 impl Context {
-    unsafe fn new(full: bool) -> Self {
+    fn new(full: bool) -> Self {
         // TODO: mutex
 
         // Vec into boxed sliced, because you can't allocate an array directly on
@@ -112,7 +112,7 @@ impl Context {
 }
 
 // TODO: keeping this function around to mirror the C++ API 1:1 for now
-pub unsafe fn get_context(full: bool) -> Context {
+pub fn get_context(full: bool) -> Context {
     Context::new(full)
 }
 
@@ -203,7 +203,7 @@ impl<'a> ItemState<'a> {
         self.mix = fnv1_512(self.mix, self.light_cache[parent_index]);
     }
 
-    pub unsafe fn _final(&mut self) -> Hash512 {
+    pub fn _final(&mut self) -> Hash512 {
         keccak_in_place(&mut self.mix.0);
 
         self.mix.clone()
