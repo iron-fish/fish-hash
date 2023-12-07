@@ -210,7 +210,7 @@ unsafe fn compare_hash(prebuild: bool) {
     }
 }
 
-unsafe fn hash_c(context: *mut fish_hash_bindings::fishhash_context, input: &str) -> [u8; 32] {
+unsafe fn hash_c(context: *mut fish_hash_bindings::FishhashContext, input: &str) -> [u8; 32] {
     let input_bytes = input.as_bytes();
     let mut output: [u8; 32] = [0; 32];
 
