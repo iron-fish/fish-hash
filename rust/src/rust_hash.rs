@@ -19,13 +19,13 @@ const SIZE_U32: usize = std::mem::size_of::<u32>();
 
 pub trait UnsafeHashData<const U64_SIZE: usize, const U32_SIZE: usize> {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; U64_SIZE];
-    unsafe fn as_32s_mut(&mut self) -> &mut [u32; U32_SIZE];
     unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
 }
 
 pub trait HashData {
     fn new() -> Self;
     fn get_as_u32(&self, index: usize) -> u32;
+    fn set_as_u32(&mut self, index: usize, value: u32);
 }
 
 #[derive(Debug)]
@@ -33,10 +33,6 @@ pub struct Hash256([u8; 32]);
 impl UnsafeHashData<4, 8> for Hash256 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 4] {
         std::mem::transmute::<&mut [u8; 32], &mut [u64; 4]>(&mut self.0)
-    }
-
-    unsafe fn as_32s_mut(&mut self) -> &mut [u32; 8] {
-        std::mem::transmute::<&mut [u8; 32], &mut [u32; 8]>(&mut self.0)
     }
 
     unsafe fn as_64s(&self) -> &[u64; 4] {
@@ -56,6 +52,10 @@ impl HashData for Hash256 {
                 .unwrap(),
         )
     }
+
+    fn set_as_u32(&mut self, index: usize, value: u32) {
+        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
+    }
 }
 
 // TODO: We really dont want clone/copy here probably
@@ -64,10 +64,6 @@ pub struct Hash512(pub [u8; 64]);
 impl UnsafeHashData<8, 16> for Hash512 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 8] {
         std::mem::transmute::<&mut [u8; 64], &mut [u64; 8]>(&mut self.0)
-    }
-
-    unsafe fn as_32s_mut(&mut self) -> &mut [u32; 16] {
-        std::mem::transmute::<&mut [u8; 64], &mut [u32; 16]>(&mut self.0)
     }
 
     unsafe fn as_64s(&self) -> &[u64; 8] {
@@ -87,6 +83,10 @@ impl HashData for Hash512 {
                 .unwrap(),
         )
     }
+
+    fn set_as_u32(&mut self, index: usize, value: u32) {
+        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -94,10 +94,6 @@ pub struct Hash1024(pub [u8; 128]);
 impl UnsafeHashData<16, 32> for Hash1024 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 16] {
         std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0)
-    }
-
-    unsafe fn as_32s_mut(&mut self) -> &mut [u32; 32] {
-        std::mem::transmute::<&mut [u8; 128], &mut [u32; 32]>(&mut self.0)
     }
 
     unsafe fn as_64s(&self) -> &[u64; 16] {
@@ -116,6 +112,10 @@ impl HashData for Hash1024 {
                 .try_into()
                 .unwrap(),
         )
+    }
+
+    fn set_as_u32(&mut self, index: usize, value: u32) {
+        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
     }
 }
 
@@ -237,8 +237,11 @@ unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> 
     let mut mix0 = light_cache[(seed0 % num_cache_items) as usize];
     let mut mix1 = light_cache[(seed1 % num_cache_items) as usize];
 
-    mix0.as_32s_mut()[0] ^= seed0;
-    mix1.as_32s_mut()[0] ^= seed1;
+    let mix0_seed = mix0.get_as_u32(0) ^ seed0;
+    let mix1_seed = mix1.get_as_u32(0) ^ seed1;
+
+    mix0.set_as_u32(0, mix0_seed);
+    mix1.set_as_u32(0, mix1_seed);
 
     keccak_in_place(&mut mix0.0);
     keccak_in_place(&mut mix1.0);
@@ -296,8 +299,8 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
         // Modify fetch1 and fetch2
         for j in 0..32 {
-            fetch1.as_32s_mut()[j] = fnv1(mix.get_as_u32(j), fetch1.get_as_u32(j));
-            fetch2.as_32s_mut()[j] = mix.get_as_u32(j) ^ fetch2.get_as_u32(j);
+            fetch1.set_as_u32(j, fnv1(mix.get_as_u32(j), fetch1.get_as_u32(j)));
+            fetch2.set_as_u32(j, mix.get_as_u32(j) ^ fetch2.get_as_u32(j));
         }
 
         // Final computation of new mix
@@ -315,7 +318,7 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
         let h1 = fnv1(mix.get_as_u32(i), mix.get_as_u32(i + 1));
         let h2 = fnv1(h1, mix.get_as_u32(i + 2));
         let h3 = fnv1(h2, mix.get_as_u32(i + 3));
-        mix_hash.as_32s_mut()[i / 4] = h3;
+        mix_hash.set_as_u32(i / 4, h3);
     }
 
     mix_hash
