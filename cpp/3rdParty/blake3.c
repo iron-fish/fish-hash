@@ -4,6 +4,9 @@
 
 #include "blake3.h"
 #include "blake3_impl.h"
+#include "blake3_dispatch.c"
+#include "blake3_portable.c"
+#include "blake3_neon.c"
 
 const char *blake3_version(void) { return BLAKE3_VERSION_STRING; }
 

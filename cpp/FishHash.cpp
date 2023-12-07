@@ -2,6 +2,9 @@
 #include "3rdParty/keccak.h"
 #include "3rdParty/blake3.h"
 
+#include "3rdParty/keccak.c"
+#include "3rdParty/blake3.c"
+
 #include <cstdlib>
 #include <cstring>
 #include <memory>
