@@ -313,7 +313,7 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
     }
 }
 
-unsafe fn build_light_cache(cache: &mut [Hash512]) {
+fn build_light_cache(cache: &mut [Hash512]) {
     let mut item: Hash512 = Hash512([0; 64]);
     keccak(&mut item.0, &SEED.0);
     cache[0] = item;
@@ -327,7 +327,7 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
     for _ in 0..LIGHT_CACHE_ROUNDS {
         for i in 0..LIGHT_CACHE_NUM_ITEMS {
             // First index: 4 first bytes of the item as little-endian integer
-            let t: usize = cache[i].as_32s_mut()[0] as usize;
+            let t: usize = u32::from_le_bytes(cache[i].0[0..4].try_into().unwrap()) as usize;
             let v: usize = t % LIGHT_CACHE_NUM_ITEMS;
 
             // Second index
@@ -340,16 +340,13 @@ unsafe fn build_light_cache(cache: &mut [Hash512]) {
     }
 }
 
-// TODO: Struct method
-#[inline]
-unsafe fn bitwise_xor(x: &Hash512, y: &Hash512) -> Hash512 {
+// TODO: Pretty sure this will work for both big and little endian
+// but we should test it
+fn bitwise_xor(x: &Hash512, y: &Hash512) -> Hash512 {
     let mut z: Hash512 = Hash512([0; 64]);
 
-    let x64 = x.as_64s();
-    let y64 = y.as_64s();
-    let z64 = z.as_64s_mut();
-    for i in 0..(std::mem::size_of::<Hash512>() / std::mem::size_of_val(&z64[0])) {
-        z64[i] = x64[i] ^ y64[i];
+    for i in 0..64 {
+        z.0[i] = x.0[i] ^ y.0[i];
     }
 
     z
