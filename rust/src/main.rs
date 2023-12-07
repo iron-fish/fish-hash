@@ -129,7 +129,7 @@ unsafe fn compare_validation() {
     let mut context_r = rust_hash::get_context(false);
 
     for input in inputs {
-        println!("Validating '{:?}'", input);
+        println!("Validating {:?}", input);
 
         let start_c = Instant::now();
         let output_c = hash_c(context_c, input);
@@ -178,7 +178,7 @@ unsafe fn compare_hash(prebuild: bool) {
     }
 
     for input in inputs {
-        println!("Hashing '{:?}'", input);
+        println!("Hashing {:?}", input);
 
         let start_c = Instant::now();
         let output_c = hash_c(context_c, input);

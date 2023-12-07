@@ -15,16 +15,20 @@ const SEED: Hash256 = Hash256([
     0x55, 0xa9, 0xb3, 0x9b, 0x0e, 0xdf, 0x26, 0x53, 0x98, 0x44, 0xf1, 0x17, 0xad, 0x67, 0x21, 0x19,
 ]);
 
-pub trait HashData<const U64_SIZE: usize, const U32_SIZE: usize> {
+pub trait UnsafeHashData<const U64_SIZE: usize, const U32_SIZE: usize> {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; U64_SIZE];
     unsafe fn as_32s_mut(&mut self) -> &mut [u32; U32_SIZE];
     unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
     unsafe fn as_32s(&self) -> &[u32; U32_SIZE];
 }
 
+pub trait HashData {
+    fn new() -> Self;
+}
+
 #[derive(Debug)]
 pub struct Hash256([u8; 32]);
-impl HashData<4, 8> for Hash256 {
+impl UnsafeHashData<4, 8> for Hash256 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 4] {
         std::mem::transmute::<&mut [u8; 32], &mut [u64; 4]>(&mut self.0)
     }
@@ -42,10 +46,16 @@ impl HashData<4, 8> for Hash256 {
     }
 }
 
+impl HashData for Hash256 {
+    fn new() -> Self {
+        Self([0; 32])
+    }
+}
+
 // TODO: We really dont want clone/copy here probably
 #[derive(Clone, Copy, Debug)]
 pub struct Hash512(pub [u8; 64]);
-impl HashData<8, 16> for Hash512 {
+impl UnsafeHashData<8, 16> for Hash512 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 8] {
         std::mem::transmute::<&mut [u8; 64], &mut [u64; 8]>(&mut self.0)
     }
@@ -63,9 +73,15 @@ impl HashData<8, 16> for Hash512 {
     }
 }
 
+impl HashData for Hash512 {
+    fn new() -> Self {
+        Self([0; 64])
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Hash1024(pub [u8; 128]);
-impl HashData<16, 32> for Hash1024 {
+impl UnsafeHashData<16, 32> for Hash1024 {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; 16] {
         std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0)
     }
@@ -83,6 +99,12 @@ impl HashData<16, 32> for Hash1024 {
     }
 }
 
+impl HashData for Hash1024 {
+    fn new() -> Self {
+        Self([0; 128])
+    }
+}
+
 pub struct Context {
     pub light_cache: Box<[Hash512]>,
     pub full_dataset: Option<Box<[Hash1024]>>,
@@ -95,11 +117,11 @@ impl Context {
         // Vec into boxed sliced, because you can't allocate an array directly on
         // the heap in rust
         // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
-        let mut light_cache = vec![Hash512([0; 64]); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice();
+        let mut light_cache = vec![Hash512::new(); LIGHT_CACHE_NUM_ITEMS].into_boxed_slice();
         build_light_cache(&mut light_cache);
 
         let full_dataset = if full {
-            Some(vec![Hash1024([0; 128]); FULL_DATASET_NUM_ITEMS].into_boxed_slice())
+            Some(vec![Hash1024::new(); FULL_DATASET_NUM_ITEMS].into_boxed_slice())
         } else {
             None
         };
@@ -165,7 +187,7 @@ fn fnv1(u: u32, v: u32) -> u32 {
 fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
     const SIZE: usize = std::mem::size_of::<u32>();
 
-    let mut r = Hash512([0; 64]);
+    let mut r = Hash512::new();
 
     for (index, item) in r.0.chunks_mut(SIZE).enumerate() {
         let start = index * SIZE;
@@ -243,7 +265,7 @@ unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> 
 
 // TODO: Probably want to return instead of using an out-variable
 pub unsafe fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
-    let mut seed: Hash512 = Hash512([0; 64]);
+    let mut seed: Hash512 = Hash512::new();
 
     let mut hasher = Hasher::new();
     hasher.update(header);
@@ -264,7 +286,7 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
     let index_limit: u32 = FULL_DATASET_NUM_ITEMS as u32;
 
     // TODO: From trait for Hash1024?
-    let mut mix: Hash1024 = Hash1024([0; 128]);
+    let mut mix: Hash1024 = Hash1024::new();
     mix.0[0..64].copy_from_slice(&seed.0);
     mix.0.copy_within(0..64, 64);
 
@@ -291,7 +313,7 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
     }
 
     // Collapse the result into 32 bytes
-    let mut mix_hash = Hash256([0; 32]);
+    let mut mix_hash = Hash256::new();
     let num_words = std::mem::size_of_val(&mix) / std::mem::size_of::<u32>();
 
     // TODO: Not 100% sure this is the same behavior
@@ -320,7 +342,7 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
 }
 
 fn build_light_cache(cache: &mut [Hash512]) {
-    let mut item: Hash512 = Hash512([0; 64]);
+    let mut item: Hash512 = Hash512::new();
     keccak(&mut item.0, &SEED.0);
     cache[0] = item;
 
@@ -348,7 +370,7 @@ fn build_light_cache(cache: &mut [Hash512]) {
 // TODO: Pretty sure this will work for both big and little endian
 // but we should test it
 fn bitwise_xor(x: &Hash512, y: &Hash512) -> Hash512 {
-    let mut z: Hash512 = Hash512([0; 64]);
+    let mut z: Hash512 = Hash512::new();
 
     for i in 0..64 {
         z.0[i] = x.0[i] ^ y.0[i];
