@@ -15,15 +15,17 @@ const SEED: Hash256 = Hash256([
     0x55, 0xa9, 0xb3, 0x9b, 0x0e, 0xdf, 0x26, 0x53, 0x98, 0x44, 0xf1, 0x17, 0xad, 0x67, 0x21, 0x19,
 ]);
 
+const SIZE_U32: usize = std::mem::size_of::<u32>();
+
 pub trait UnsafeHashData<const U64_SIZE: usize, const U32_SIZE: usize> {
     unsafe fn as_64s_mut(&mut self) -> &mut [u64; U64_SIZE];
     unsafe fn as_32s_mut(&mut self) -> &mut [u32; U32_SIZE];
     unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
-    unsafe fn as_32s(&self) -> &[u32; U32_SIZE];
 }
 
 pub trait HashData {
     fn new() -> Self;
+    fn get_as_u32(&self, index: usize) -> u32;
 }
 
 #[derive(Debug)]
@@ -40,15 +42,19 @@ impl UnsafeHashData<4, 8> for Hash256 {
     unsafe fn as_64s(&self) -> &[u64; 4] {
         std::mem::transmute::<&[u8; 32], &[u64; 4]>(&self.0)
     }
-
-    unsafe fn as_32s(&self) -> &[u32; 8] {
-        std::mem::transmute::<&[u8; 32], &[u32; 8]>(&self.0)
-    }
 }
 
 impl HashData for Hash256 {
     fn new() -> Self {
         Self([0; 32])
+    }
+
+    fn get_as_u32(&self, index: usize) -> u32 {
+        u32::from_le_bytes(
+            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
+                .try_into()
+                .unwrap(),
+        )
     }
 }
 
@@ -67,15 +73,19 @@ impl UnsafeHashData<8, 16> for Hash512 {
     unsafe fn as_64s(&self) -> &[u64; 8] {
         std::mem::transmute::<&[u8; 64], &[u64; 8]>(&self.0)
     }
-
-    unsafe fn as_32s(&self) -> &[u32; 16] {
-        std::mem::transmute::<&[u8; 64], &[u32; 16]>(&self.0)
-    }
 }
 
 impl HashData for Hash512 {
     fn new() -> Self {
         Self([0; 64])
+    }
+
+    fn get_as_u32(&self, index: usize) -> u32 {
+        u32::from_le_bytes(
+            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
+                .try_into()
+                .unwrap(),
+        )
     }
 }
 
@@ -93,15 +103,19 @@ impl UnsafeHashData<16, 32> for Hash1024 {
     unsafe fn as_64s(&self) -> &[u64; 16] {
         std::mem::transmute::<&[u8; 128], &[u64; 16]>(&self.0)
     }
-
-    unsafe fn as_32s(&self) -> &[u32; 32] {
-        std::mem::transmute::<&[u8; 128], &[u32; 32]>(&self.0)
-    }
 }
 
 impl HashData for Hash1024 {
     fn new() -> Self {
         Self([0; 128])
+    }
+
+    fn get_as_u32(&self, index: usize) -> u32 {
+        u32::from_le_bytes(
+            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
+                .try_into()
+                .unwrap(),
+        )
     }
 }
 
@@ -231,8 +245,8 @@ unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> 
 
     const NUM_WORDS: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
     for j in 0..FULL_DATASET_ITEM_PARENTS {
-        let t0 = fnv1(seed0 ^ j, mix0.as_32s()[(j % NUM_WORDS) as usize]);
-        let t1 = fnv1(seed1 ^ j, mix1.as_32s()[(j % NUM_WORDS) as usize]);
+        let t0 = fnv1(seed0 ^ j, mix0.get_as_u32((j % NUM_WORDS) as usize));
+        let t1 = fnv1(seed1 ^ j, mix1.get_as_u32((j % NUM_WORDS) as usize));
         mix0 = fnv1_512(mix0, light_cache[(t0 % num_cache_items) as usize]);
         mix1 = fnv1_512(mix1, light_cache[(t1 % num_cache_items) as usize]);
     }
@@ -272,9 +286,9 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
     for _ in 0..NUM_DATASET_ACCESSES as usize {
         // Calculate new fetching indexes
-        let p0 = mix.as_32s()[0] % index_limit;
-        let p1 = mix.as_32s()[4] % index_limit;
-        let p2 = mix.as_32s()[8] % index_limit;
+        let p0 = mix.get_as_u32(0) % index_limit;
+        let p1 = mix.get_as_u32(4) % index_limit;
+        let p2 = mix.get_as_u32(8) % index_limit;
 
         let fetch0 = lookup(context, p0 as usize);
         let mut fetch1 = lookup(context, p1 as usize);
@@ -282,8 +296,8 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
         // Modify fetch1 and fetch2
         for j in 0..32 {
-            fetch1.as_32s_mut()[j] = fnv1(mix.as_32s()[j], fetch1.as_32s()[j]);
-            fetch2.as_32s_mut()[j] = mix.as_32s()[j] ^ fetch2.as_32s()[j];
+            fetch1.as_32s_mut()[j] = fnv1(mix.get_as_u32(j), fetch1.get_as_u32(j));
+            fetch2.as_32s_mut()[j] = mix.get_as_u32(j) ^ fetch2.get_as_u32(j);
         }
 
         // Final computation of new mix
@@ -298,9 +312,9 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
     // TODO: Not 100% sure this is the same behavior
     for i in (0..num_words).step_by(4) {
-        let h1 = fnv1(mix.as_32s()[i], mix.as_32s()[i + 1]);
-        let h2 = fnv1(h1, mix.as_32s()[i + 2]);
-        let h3 = fnv1(h2, mix.as_32s()[i + 3]);
+        let h1 = fnv1(mix.get_as_u32(i), mix.get_as_u32(i + 1));
+        let h2 = fnv1(h1, mix.get_as_u32(i + 2));
+        let h3 = fnv1(h2, mix.get_as_u32(i + 3));
         mix_hash.as_32s_mut()[i / 4] = h3;
     }
 
