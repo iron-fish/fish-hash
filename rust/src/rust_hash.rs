@@ -118,7 +118,7 @@ pub fn get_context(full: bool) -> Context {
 
 pub unsafe fn prebuild_dataset(
     full_dataset: &mut Box<[Hash1024]>,
-    light_cache: &Box<[Hash512]>,
+    light_cache: &[Hash512],
     num_threads: usize,
 ) {
     if num_threads > 1 {
@@ -127,7 +127,7 @@ pub unsafe fn prebuild_dataset(
 
             let mut threads = Vec::with_capacity(num_threads);
 
-            let mut chunks = full_dataset.chunks_mut(batch_size);
+            let chunks = full_dataset.chunks_mut(batch_size);
 
             let light_cache_slice = &light_cache[0..];
 
@@ -135,16 +135,16 @@ pub unsafe fn prebuild_dataset(
                 let start = index * batch_size;
 
                 let thread_handle =
-                    scope.spawn(move || build_dataset_segment(chunk, &light_cache_slice, start));
+                    scope.spawn(move || build_dataset_segment(chunk, light_cache_slice, start));
                 threads.push(thread_handle);
             }
 
             for handle in threads {
-                handle.join();
+                handle.join().unwrap();
             }
         });
     } else {
-        build_dataset_segment(&mut full_dataset[0..], &light_cache, 0);
+        build_dataset_segment(&mut full_dataset[0..], light_cache, 0);
     }
 }
 
@@ -213,7 +213,7 @@ impl<'a> ItemState<'a> {
     pub fn _final(&mut self) -> Hash512 {
         keccak_in_place(&mut self.mix.0);
 
-        self.mix.clone()
+        self.mix
     }
 }
 
@@ -262,14 +262,13 @@ pub unsafe fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
 
 unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
     let index_limit: u32 = FULL_DATASET_NUM_ITEMS as u32;
-    let seed_init = seed.as_32s()[0];
 
     // TODO: From trait for Hash1024?
     let mut mix: Hash1024 = Hash1024([0; 128]);
     mix.0[0..64].copy_from_slice(&seed.0);
     mix.0.copy_within(0..64, 64);
 
-    for i in 0..NUM_DATASET_ACCESSES as usize {
+    for _ in 0..NUM_DATASET_ACCESSES as usize {
         // Calculate new fetching indexes
         let p0 = mix.as_32s()[0] % index_limit;
         let p1 = mix.as_32s()[4] % index_limit;
@@ -314,9 +313,9 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
                 *item = calculate_dataset_item_1024(&context.light_cache, index);
             }
 
-            return *item;
+            *item
         }
-        None => return calculate_dataset_item_1024(&context.light_cache, index),
+        None => calculate_dataset_item_1024(&context.light_cache, index),
     }
 }
 
@@ -325,10 +324,9 @@ fn build_light_cache(cache: &mut [Hash512]) {
     keccak(&mut item.0, &SEED.0);
     cache[0] = item;
 
-    for i in 1..LIGHT_CACHE_NUM_ITEMS {
-        let size = std::mem::size_of_val(&item);
+    for cache_item in cache.iter_mut().take(LIGHT_CACHE_NUM_ITEMS).skip(1) {
         keccak_in_place(&mut item.0);
-        cache[i] = item;
+        *cache_item = item;
     }
 
     for _ in 0..LIGHT_CACHE_ROUNDS {

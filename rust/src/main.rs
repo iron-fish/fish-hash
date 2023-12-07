@@ -61,15 +61,11 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_c.as_millis()
     );
 
-    let mut context_r = rust_hash::get_context(true);
+    let context_r = rust_hash::get_context(true);
     let mut dataset = context_r.full_dataset.unwrap();
 
     let start_r = Instant::now();
-    rust_hash::prebuild_dataset(
-        &mut dataset,
-        &mut context_r.light_cache,
-        num_threads as usize,
-    );
+    rust_hash::prebuild_dataset(&mut dataset, &context_r.light_cache, num_threads as usize);
     let elapsed_r = start_r.elapsed();
 
     println!(
