@@ -59,7 +59,6 @@ impl HashData for Hash256 {
     }
 }
 
-// TODO: We really dont want clone/copy here probably
 #[derive(Clone, Copy, Debug)]
 pub struct Hash512(pub [u8; 64]);
 
@@ -143,7 +142,7 @@ pub struct Context {
 }
 
 impl Context {
-    fn new(full: bool) -> Self {
+    pub fn new(full: bool) -> Self {
         // TODO: mutex
 
         // Vec into boxed sliced, because you can't allocate an array directly on
@@ -164,42 +163,39 @@ impl Context {
             full_dataset,
         }
     }
-}
 
-// TODO: keeping this function around to mirror the C++ API 1:1 for now
-pub fn get_context(full: bool) -> Context {
-    Context::new(full)
-}
+    pub fn prebuild_dataset(&mut self, num_threads: usize) {
+        if self.full_dataset.is_none() {
+            return;
+        }
 
-pub fn prebuild_dataset(
-    full_dataset: &mut Box<[Hash1024]>,
-    light_cache: &[Hash512],
-    num_threads: usize,
-) {
-    if num_threads > 1 {
-        std::thread::scope(|scope| {
-            let batch_size = full_dataset.len() / num_threads;
+        let full_dataset = self.full_dataset.as_mut().unwrap();
 
-            let mut threads = Vec::with_capacity(num_threads);
+        if num_threads > 1 {
+            std::thread::scope(|scope| {
+                let batch_size = full_dataset.len() / num_threads;
 
-            let chunks = full_dataset.chunks_mut(batch_size);
+                let mut threads = Vec::with_capacity(num_threads);
 
-            let light_cache_slice = &light_cache[0..];
+                let chunks = full_dataset.chunks_mut(batch_size);
 
-            for (index, chunk) in chunks.enumerate() {
-                let start = index * batch_size;
+                let light_cache_slice = &self.light_cache[0..];
 
-                let thread_handle =
-                    scope.spawn(move || build_dataset_segment(chunk, light_cache_slice, start));
-                threads.push(thread_handle);
-            }
+                for (index, chunk) in chunks.enumerate() {
+                    let start = index * batch_size;
 
-            for handle in threads {
-                handle.join().unwrap();
-            }
-        });
-    } else {
-        build_dataset_segment(&mut full_dataset[0..], light_cache, 0);
+                    let thread_handle =
+                        scope.spawn(move || build_dataset_segment(chunk, light_cache_slice, start));
+                    threads.push(thread_handle);
+                }
+
+                for handle in threads {
+                    handle.join().unwrap();
+                }
+            });
+        } else {
+            build_dataset_segment(&mut full_dataset[0..], &self.light_cache, 0);
+        }
     }
 }
 
@@ -257,7 +253,6 @@ fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash102
     Hash1024::from_512s(&mix0, &mix1)
 }
 
-// TODO: Probably want to return instead of using an out-variable
 pub fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
     let mut seed: Hash512 = Hash512::new();
 
@@ -308,7 +303,6 @@ fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
     let mut mix_hash = Hash256::new();
     let num_words = std::mem::size_of_val(&mix) / std::mem::size_of::<u32>();
 
-    // TODO: Not 100% sure this is the same behavior
     for i in (0..num_words).step_by(4) {
         let h1 = fnv1(mix.get_as_u32(i), mix.get_as_u32(i + 1));
         let h2 = fnv1(h1, mix.get_as_u32(i + 2));

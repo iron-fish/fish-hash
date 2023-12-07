@@ -25,7 +25,7 @@ unsafe fn compare_get_context_light() {
     println!("{:?}", context_c.read().light_cache.read().bytes);
 
     let start_r = Instant::now();
-    let context_r = rust_hash::get_context(false);
+    let context_r = rust_hash::Context::new(false);
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", context_r.light_cache[0].0);
@@ -61,11 +61,10 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_c.as_millis()
     );
 
-    let context_r = rust_hash::get_context(true);
-    let mut dataset = context_r.full_dataset.unwrap();
+    let mut context_r = rust_hash::Context::new(true);
 
     let start_r = Instant::now();
-    rust_hash::prebuild_dataset(&mut dataset, &context_r.light_cache, num_threads as usize);
+    context_r.prebuild_dataset(num_threads as usize);
     let elapsed_r = start_r.elapsed();
 
     println!(
@@ -73,7 +72,7 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_r.as_millis()
     );
 
-    for (i, hash1024) in dataset.iter().enumerate() {
+    for (i, hash1024) in context_r.full_dataset.as_ref().unwrap().iter().enumerate() {
         assert_eq!(
             context_c.read().full_dataset.add(i).read().bytes,
             hash1024.0,
@@ -126,7 +125,7 @@ unsafe fn compare_validation() {
     ];
 
     let context_c = fish_hash_bindings::get_context(false);
-    let mut context_r = rust_hash::get_context(false);
+    let mut context_r = rust_hash::Context::new(false);
 
     for input in inputs {
         println!("Validating {:?}", input);
@@ -169,12 +168,11 @@ unsafe fn compare_hash(prebuild: bool) {
     let num_threads = 8;
 
     let context_c = fish_hash_bindings::get_context(true);
-    let mut context_r = rust_hash::get_context(true);
-    let dataset = context_r.full_dataset.as_mut().unwrap();
+    let mut context_r = rust_hash::Context::new(true);
 
     if prebuild {
         fish_hash_bindings::prebuild_dataset(context_c, num_threads);
-        rust_hash::prebuild_dataset(dataset, &context_r.light_cache, num_threads as usize);
+        context_r.prebuild_dataset(num_threads as usize);
     }
 
     for input in inputs {
