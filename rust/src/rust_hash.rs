@@ -218,19 +218,10 @@ fn fnv1(u: u32, v: u32) -> u32 {
 }
 
 fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
-    const SIZE: usize = std::mem::size_of::<u32>();
-
     let mut r = Hash512::new();
 
-    for (index, item) in r.0.chunks_mut(SIZE).enumerate() {
-        let start = index * SIZE;
-        let end = start + SIZE;
-
-        let u_u32 = u32::from_le_bytes(u.0[start..end].try_into().unwrap());
-        let v_u32 = u32::from_le_bytes(v.0[start..end].try_into().unwrap());
-
-        let value_bytes = fnv1(u_u32, v_u32).to_le_bytes();
-        item[0..SIZE].copy_from_slice(&value_bytes[0..]);
+    for i in 0..r.0.len() / SIZE_U32 {
+        r.set_as_u32(i, fnv1(u.get_as_u32(i), v.get_as_u32(i)));
     }
 
     r
