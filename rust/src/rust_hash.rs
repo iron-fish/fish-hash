@@ -163,7 +163,7 @@ pub fn get_context(full: bool) -> Context {
     Context::new(full)
 }
 
-pub unsafe fn prebuild_dataset(
+pub fn prebuild_dataset(
     full_dataset: &mut Box<[Hash1024]>,
     light_cache: &[Hash512],
     num_threads: usize,
@@ -195,7 +195,7 @@ pub unsafe fn prebuild_dataset(
     }
 }
 
-pub unsafe fn build_dataset_segment(
+pub fn build_dataset_segment(
     dataset_slice: &mut [Hash1024],
     light_cache: &[Hash512],
     offset: usize,
@@ -228,7 +228,7 @@ fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
     r
 }
 
-unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash1024 {
+fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash1024 {
     let num_cache_items = LIGHT_CACHE_NUM_ITEMS as u32; // TODO: Unsafe cast
 
     let seed0 = (index * 2) as u32;
