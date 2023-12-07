@@ -162,13 +162,20 @@ fn fnv1(u: u32, v: u32) -> u32 {
     (u * FNV_PRIME) ^ v
 }
 
-unsafe fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
-    let mut r = Hash512([0; 64]);
-    let r32s = r.as_32s_mut();
+fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
+    const SIZE: usize = std::mem::size_of::<u32>();
 
-    for (i, item) in r32s.iter_mut().enumerate() {
-        //TODO: pretty sure we will always have 16 of them
-        *item = fnv1(u.as_32s()[i], v.as_32s()[i])
+    let mut r = Hash512([0; 64]);
+
+    for (index, item) in r.0.chunks_mut(SIZE).enumerate() {
+        let start = index * SIZE;
+        let end = start + SIZE;
+
+        let u_u32 = u32::from_le_bytes(u.0[start..end].try_into().unwrap());
+        let v_u32 = u32::from_le_bytes(v.0[start..end].try_into().unwrap());
+
+        let value_bytes = fnv1(u_u32, v_u32).to_le_bytes();
+        item[0..SIZE].copy_from_slice(&value_bytes[0..]);
     }
 
     r

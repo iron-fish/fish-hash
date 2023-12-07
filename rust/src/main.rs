@@ -8,9 +8,9 @@ mod rust_hash;
 
 fn main() {
     unsafe {
-        // compare_keccak();
-        // compare_get_context_light();
-        // compare_validation();
+        compare_keccak();
+        compare_get_context_light();
+        compare_validation();
         compare_hash(false);
         // compare_hash(true);
         // compare_prebuild_dataset();
