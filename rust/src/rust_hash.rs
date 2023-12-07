@@ -105,6 +105,17 @@ impl HashData for Hash1024 {
     }
 }
 
+impl Hash1024 {
+    fn from_512s(first: &Hash512, second: &Hash512) -> Self {
+        let mut hash = Self::new();
+        let (first_half, second_half) = hash.0.split_at_mut(first.0.len());
+        first_half.copy_from_slice(&first.0);
+        second_half.copy_from_slice(&second.0);
+
+        hash
+    }
+}
+
 pub struct Context {
     pub light_cache: Box<[Hash512]>,
     pub full_dataset: Option<Box<[Hash1024]>>,
@@ -203,64 +214,33 @@ fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
     r
 }
 
-pub struct ItemState<'a> {
-    pub seed: u32,
-    pub mix: Hash512,
-    pub light_cache: &'a [Hash512],
-}
-
-impl<'a> ItemState<'a> {
-    pub unsafe fn new(light_cache: &'a [Hash512], index: usize) -> Self {
-        let mut mix = light_cache[index % LIGHT_CACHE_NUM_ITEMS];
-        let seed = index as u32; // TODO: Do we need to cast here??
-        mix.as_32s_mut()[0] ^= seed; // TODO: Does this actually modify in place??
-
-        keccak_in_place(&mut mix.0);
-
-        ItemState {
-            seed,
-            mix,
-            light_cache,
-        }
-    }
-
-    pub unsafe fn update(&mut self, round: u32) {
-        let num_words: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
-        let index: usize = (round % num_words) as usize; // TODO: may need usize here??
-        let t: u32 = fnv1(self.seed ^ round, self.mix.as_32s()[index]);
-        let parent_index = (t as usize) % LIGHT_CACHE_NUM_ITEMS; // TODO: casting u32 to usize here too
-        self.mix = fnv1_512(self.mix, self.light_cache[parent_index]);
-    }
-
-    pub fn _final(&mut self) -> Hash512 {
-        keccak_in_place(&mut self.mix.0);
-
-        self.mix
-    }
-}
-
 unsafe fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash1024 {
-    let mut item0 = ItemState::new(light_cache, index * 2);
-    let mut item1 = ItemState::new(light_cache, index * 2 + 1);
+    let num_cache_items = LIGHT_CACHE_NUM_ITEMS as u32; // TODO: Unsafe cast
 
+    let seed0 = (index * 2) as u32;
+    let seed1 = seed0 + 1;
+
+    let mut mix0 = light_cache[(seed0 % num_cache_items) as usize];
+    let mut mix1 = light_cache[(seed1 % num_cache_items) as usize];
+
+    mix0.as_32s_mut()[0] ^= seed0;
+    mix1.as_32s_mut()[0] ^= seed1;
+
+    keccak_in_place(&mut mix0.0);
+    keccak_in_place(&mut mix1.0);
+
+    const NUM_WORDS: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
     for j in 0..FULL_DATASET_ITEM_PARENTS {
-        item0.update(j);
-        item1.update(j);
+        let t0 = fnv1(seed0 ^ j, mix0.as_32s()[(j % NUM_WORDS) as usize]);
+        let t1 = fnv1(seed1 ^ j, mix1.as_32s()[(j % NUM_WORDS) as usize]);
+        mix0 = fnv1_512(mix0, light_cache[(t0 % num_cache_items) as usize]);
+        mix1 = fnv1_512(mix1, light_cache[(t1 % num_cache_items) as usize]);
     }
 
-    // TODO: remove unnecessary copies here
-    let dataset_item: [u8; 128] = {
-        let final0 = item0._final().0;
-        let final1 = item1._final().0;
+    keccak_in_place(&mut mix0.0);
+    keccak_in_place(&mut mix1.0);
 
-        let mut whole: [u8; 128] = [0; 128];
-        let (one, two) = whole.split_at_mut(final0.len());
-        one.copy_from_slice(&final0);
-        two.copy_from_slice(&final1);
-        whole
-    };
-
-    Hash1024(dataset_item)
+    Hash1024::from_512s(&mix0, &mix1)
 }
 
 // TODO: Probably want to return instead of using an out-variable
@@ -358,6 +338,7 @@ fn build_light_cache(cache: &mut [Hash512]) {
             let v: usize = t % LIGHT_CACHE_NUM_ITEMS;
 
             // Second index
+            // TODO: Using a usize here will result in different results on 32-bit systems
             let w: usize =
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
