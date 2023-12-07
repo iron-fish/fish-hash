@@ -16,29 +16,18 @@ const SEED: Hash256 = Hash256([
 ]);
 
 const SIZE_U32: usize = std::mem::size_of::<u32>();
-
-pub trait UnsafeHashData<const U64_SIZE: usize, const U32_SIZE: usize> {
-    unsafe fn as_64s_mut(&mut self) -> &mut [u64; U64_SIZE];
-    unsafe fn as_64s(&self) -> &[u64; U64_SIZE];
-}
+const SIZE_U64: usize = std::mem::size_of::<u64>();
 
 pub trait HashData {
     fn new() -> Self;
     fn get_as_u32(&self, index: usize) -> u32;
     fn set_as_u32(&mut self, index: usize, value: u32);
+    fn get_as_u64(&self, index: usize) -> u64;
+    fn set_as_u64(&mut self, index: usize, value: u64);
 }
 
 #[derive(Debug)]
 pub struct Hash256([u8; 32]);
-impl UnsafeHashData<4, 8> for Hash256 {
-    unsafe fn as_64s_mut(&mut self) -> &mut [u64; 4] {
-        std::mem::transmute::<&mut [u8; 32], &mut [u64; 4]>(&mut self.0)
-    }
-
-    unsafe fn as_64s(&self) -> &[u64; 4] {
-        std::mem::transmute::<&[u8; 32], &[u64; 4]>(&self.0)
-    }
-}
 
 impl HashData for Hash256 {
     fn new() -> Self {
@@ -56,20 +45,23 @@ impl HashData for Hash256 {
     fn set_as_u32(&mut self, index: usize, value: u32) {
         self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
     }
+
+    fn get_as_u64(&self, index: usize) -> u64 {
+        u64::from_le_bytes(
+            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    fn set_as_u64(&mut self, index: usize, value: u64) {
+        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
+    }
 }
 
 // TODO: We really dont want clone/copy here probably
 #[derive(Clone, Copy, Debug)]
 pub struct Hash512(pub [u8; 64]);
-impl UnsafeHashData<8, 16> for Hash512 {
-    unsafe fn as_64s_mut(&mut self) -> &mut [u64; 8] {
-        std::mem::transmute::<&mut [u8; 64], &mut [u64; 8]>(&mut self.0)
-    }
-
-    unsafe fn as_64s(&self) -> &[u64; 8] {
-        std::mem::transmute::<&[u8; 64], &[u64; 8]>(&self.0)
-    }
-}
 
 impl HashData for Hash512 {
     fn new() -> Self {
@@ -87,19 +79,22 @@ impl HashData for Hash512 {
     fn set_as_u32(&mut self, index: usize, value: u32) {
         self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
     }
+
+    fn get_as_u64(&self, index: usize) -> u64 {
+        u64::from_le_bytes(
+            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    fn set_as_u64(&mut self, index: usize, value: u64) {
+        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct Hash1024(pub [u8; 128]);
-impl UnsafeHashData<16, 32> for Hash1024 {
-    unsafe fn as_64s_mut(&mut self) -> &mut [u64; 16] {
-        std::mem::transmute::<&mut [u8; 128], &mut [u64; 16]>(&mut self.0)
-    }
-
-    unsafe fn as_64s(&self) -> &[u64; 16] {
-        std::mem::transmute::<&[u8; 128], &[u64; 16]>(&self.0)
-    }
-}
 
 impl HashData for Hash1024 {
     fn new() -> Self {
@@ -116,6 +111,18 @@ impl HashData for Hash1024 {
 
     fn set_as_u32(&mut self, index: usize, value: u32) {
         self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
+    }
+
+    fn get_as_u64(&self, index: usize) -> u64 {
+        u64::from_le_bytes(
+            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    fn set_as_u64(&mut self, index: usize, value: u64) {
+        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
     }
 }
 
@@ -305,7 +312,10 @@ unsafe fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
         // Final computation of new mix
         for j in 0..16 {
-            mix.as_64s_mut()[j] = fetch0.as_64s()[j] * fetch1.as_64s()[j] + fetch2.as_64s()[j];
+            mix.set_as_u64(
+                j,
+                fetch0.get_as_u64(j) * fetch1.get_as_u64(j) + fetch2.get_as_u64(j),
+            );
         }
     }
 
@@ -328,7 +338,7 @@ unsafe fn lookup(context: &mut Context, index: usize) -> Hash1024 {
     match &mut context.full_dataset {
         Some(dataset) => {
             let item = &mut dataset[index];
-            if item.as_64s()[0] == 0 {
+            if item.get_as_u64(0) == 0 {
                 *item = calculate_dataset_item_1024(&context.light_cache, index);
             }
 
