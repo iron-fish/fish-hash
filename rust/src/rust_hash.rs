@@ -67,7 +67,7 @@ impl HashData for Hash256 {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Hash512(pub [u8; 64]);
+pub struct Hash512([u8; 64]);
 
 impl HashData for Hash512 {
     fn new() -> Self {
@@ -85,7 +85,7 @@ impl HashData for Hash512 {
 
 impl Hash512 {
     fn xor(a: &Self, b: &Self) -> Self {
-        let mut hash: Hash512 = Hash512::new();
+        let mut hash = Hash512::new();
 
         for i in 0..64 {
             hash.0[i] = a.0[i] ^ b.0[i];
@@ -96,7 +96,7 @@ impl Hash512 {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Hash1024(pub [u8; 128]);
+pub struct Hash1024([u8; 128]);
 
 impl HashData for Hash1024 {
     fn new() -> Self {

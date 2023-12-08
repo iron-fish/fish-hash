@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use crate::rust_hash::HashData;
+
 mod fish_hash_bindings;
 mod keccak;
 mod rust_hash;
@@ -25,12 +27,12 @@ unsafe fn compare_get_context_light() {
     let context_r = rust_hash::Context::new(false);
     let elapsed_r = start_r.elapsed();
 
-    println!("{:?}", context_r.light_cache[0].0);
+    println!("{:?}", context_r.light_cache[0].as_bytes());
 
     for i in 0..context_r.light_cache.len() {
         assert_eq!(
             context_c.read().light_cache.add(i).read().bytes,
-            context_r.light_cache[i].0
+            context_r.light_cache[i].as_bytes()
         );
     }
 
@@ -73,7 +75,7 @@ unsafe fn compare_prebuild_dataset() {
     for (i, hash1024) in context_r.full_dataset.as_ref().unwrap().iter().enumerate() {
         assert_eq!(
             context_c.read().full_dataset.add(i).read().bytes,
-            hash1024.0,
+            hash1024.as_bytes(),
             "index {}",
             i
         );
@@ -164,7 +166,7 @@ unsafe fn compare_hash(prebuild: bool) {
         for (i, hash1024) in context_r.full_dataset.as_ref().unwrap().iter().enumerate() {
             assert_eq!(
                 context_c.read().full_dataset.add(i).read().bytes,
-                hash1024.0,
+                hash1024.as_bytes(),
                 "index {}",
                 i
             );
