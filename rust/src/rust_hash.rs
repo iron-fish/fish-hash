@@ -2,7 +2,6 @@ use blake3::Hasher;
 
 use crate::keccak::{keccak, keccak_in_place};
 
-// TODO: These are static in the c++ version
 const FNV_PRIME: u32 = 0x01000193;
 const FULL_DATASET_ITEM_PARENTS: u32 = 512;
 const NUM_DATASET_ACCESSES: i32 = 32;
@@ -20,10 +19,34 @@ const SIZE_U64: usize = std::mem::size_of::<u64>();
 
 pub trait HashData {
     fn new() -> Self;
-    fn get_as_u32(&self, index: usize) -> u32;
-    fn set_as_u32(&mut self, index: usize, value: u32);
-    fn get_as_u64(&self, index: usize) -> u64;
-    fn set_as_u64(&mut self, index: usize, value: u64);
+    fn as_bytes(&self) -> &[u8];
+    fn as_bytes_mut(&mut self) -> &mut [u8];
+
+    fn get_as_u32(&self, index: usize) -> u32 {
+        u32::from_le_bytes(
+            self.as_bytes()[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    fn set_as_u32(&mut self, index: usize, value: u32) {
+        self.as_bytes_mut()[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
+            .copy_from_slice(&value.to_le_bytes())
+    }
+
+    fn get_as_u64(&self, index: usize) -> u64 {
+        u64::from_le_bytes(
+            self.as_bytes()[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
+                .try_into()
+                .unwrap(),
+        )
+    }
+
+    fn set_as_u64(&mut self, index: usize, value: u64) {
+        self.as_bytes_mut()[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
+            .copy_from_slice(&value.to_le_bytes())
+    }
 }
 
 #[derive(Debug)]
@@ -34,28 +57,12 @@ impl HashData for Hash256 {
         Self([0; 32])
     }
 
-    fn get_as_u32(&self, index: usize) -> u32 {
-        u32::from_le_bytes(
-            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
-                .try_into()
-                .unwrap(),
-        )
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
-    fn set_as_u32(&mut self, index: usize, value: u32) {
-        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
-    }
-
-    fn get_as_u64(&self, index: usize) -> u64 {
-        u64::from_le_bytes(
-            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
-                .try_into()
-                .unwrap(),
-        )
-    }
-
-    fn set_as_u64(&mut self, index: usize, value: u64) {
-        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.0
     }
 }
 
@@ -67,28 +74,12 @@ impl HashData for Hash512 {
         Self([0; 64])
     }
 
-    fn get_as_u32(&self, index: usize) -> u32 {
-        u32::from_le_bytes(
-            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
-                .try_into()
-                .unwrap(),
-        )
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
-    fn set_as_u32(&mut self, index: usize, value: u32) {
-        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
-    }
-
-    fn get_as_u64(&self, index: usize) -> u64 {
-        u64::from_le_bytes(
-            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
-                .try_into()
-                .unwrap(),
-        )
-    }
-
-    fn set_as_u64(&mut self, index: usize, value: u64) {
-        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.0
     }
 }
 
@@ -112,28 +103,12 @@ impl HashData for Hash1024 {
         Self([0; 128])
     }
 
-    fn get_as_u32(&self, index: usize) -> u32 {
-        u32::from_le_bytes(
-            self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32]
-                .try_into()
-                .unwrap(),
-        )
+    fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
-    fn set_as_u32(&mut self, index: usize, value: u32) {
-        self.0[index * SIZE_U32..index * SIZE_U32 + SIZE_U32].copy_from_slice(&value.to_le_bytes())
-    }
-
-    fn get_as_u64(&self, index: usize) -> u64 {
-        u64::from_le_bytes(
-            self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64]
-                .try_into()
-                .unwrap(),
-        )
-    }
-
-    fn set_as_u64(&mut self, index: usize, value: u64) {
-        self.0[index * SIZE_U64..index * SIZE_U64 + SIZE_U64].copy_from_slice(&value.to_le_bytes())
+    fn as_bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.0
     }
 }
 
