@@ -92,6 +92,18 @@ impl HashData for Hash512 {
     }
 }
 
+impl Hash512 {
+    fn xor(a: &Self, b: &Self) -> Self {
+        let mut hash: Hash512 = Hash512::new();
+
+        for i in 0..64 {
+            hash.0[i] = a.0[i] ^ b.0[i];
+        }
+
+        hash
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct Hash1024(pub [u8; 128]);
 
@@ -171,13 +183,11 @@ impl Context {
 
         if num_threads > 1 {
             std::thread::scope(|scope| {
-                let batch_size = full_dataset.len() / num_threads;
-
                 let mut threads = Vec::with_capacity(num_threads);
 
-                let chunks = full_dataset.chunks_mut(batch_size);
-
                 let light_cache_slice = &self.light_cache[0..];
+                let batch_size = full_dataset.len() / num_threads;
+                let chunks = full_dataset.chunks_mut(batch_size);
 
                 for (index, chunk) in chunks.enumerate() {
                     let start = index * batch_size;
@@ -345,20 +355,8 @@ fn build_light_cache(cache: &mut [Hash512]) {
             let w: u32 =
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
-            let x: Hash512 = bitwise_xor(&cache[v as usize], &cache[w as usize]);
+            let x = Hash512::xor(&cache[v as usize], &cache[w as usize]);
             keccak(&mut cache[i as usize].0, &x.0);
         }
     }
-}
-
-// TODO: Pretty sure this will work for both big and little endian
-// but we should test it
-fn bitwise_xor(x: &Hash512, y: &Hash512) -> Hash512 {
-    let mut z: Hash512 = Hash512::new();
-
-    for i in 0..64 {
-        z.0[i] = x.0[i] ^ y.0[i];
-    }
-
-    z
 }
