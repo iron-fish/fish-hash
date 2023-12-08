@@ -1,14 +1,11 @@
 use std::time::Instant;
 
-use fish_hash_bindings::keccak2;
-
 mod fish_hash_bindings;
 mod keccak;
 mod rust_hash;
 
 fn main() {
     unsafe {
-        compare_keccak();
         compare_get_context_light();
         compare_validation();
         compare_hash(false);
@@ -47,6 +44,7 @@ unsafe fn compare_get_context_light() {
     );
 }
 
+#[allow(dead_code)]
 unsafe fn compare_prebuild_dataset() {
     let num_threads = 8;
 
@@ -80,40 +78,6 @@ unsafe fn compare_prebuild_dataset() {
             i
         );
     }
-}
-
-unsafe fn compare_keccak() {
-    let input = [3u8; 64];
-
-    let mut out_c_bytes = [0u8; 64];
-
-    let start_c = Instant::now();
-    let mut out_c: [u64; 8] = [0; 8];
-    keccak2(
-        out_c.as_mut_ptr(),
-        512,
-        input.as_ptr(),
-        input.len() as isize,
-    );
-    let elapsed_c = start_c.elapsed();
-
-    for (index, i) in out_c.iter().enumerate() {
-        out_c_bytes[index * 8..index * 8 + 8].copy_from_slice(&i.to_le_bytes());
-    }
-
-    println!("{:?}", out_c_bytes);
-
-    let start_r = Instant::now();
-    let mut out_r: [u8; 64] = [0; 64];
-    keccak::keccak(&mut out_r, &input);
-    let elapsed_r = start_r.elapsed();
-
-    println!("{:?}", out_r);
-
-    assert_eq!(out_c_bytes, out_r);
-
-    println!("keccak: C++  took {:?} nanoseconds", elapsed_c.as_nanos());
-    println!("keccak: Rust took {:?} nanoseconds", elapsed_r.as_nanos());
 }
 
 unsafe fn compare_validation() {

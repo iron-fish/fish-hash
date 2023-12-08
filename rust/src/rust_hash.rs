@@ -143,8 +143,6 @@ pub struct Context {
 
 impl Context {
     pub fn new(full: bool) -> Self {
-        // TODO: mutex
-
         // Vec into boxed sliced, because you can't allocate an array directly on
         // the heap in rust
         // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
@@ -199,11 +197,7 @@ impl Context {
     }
 }
 
-pub fn build_dataset_segment(
-    dataset_slice: &mut [Hash1024],
-    light_cache: &[Hash512],
-    offset: usize,
-) {
+fn build_dataset_segment(dataset_slice: &mut [Hash1024], light_cache: &[Hash512], offset: usize) {
     for (index, item) in dataset_slice.iter_mut().enumerate() {
         *item = calculate_dataset_item_1024(light_cache, offset + index);
     }
