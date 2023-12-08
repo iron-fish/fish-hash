@@ -1,4 +1,3 @@
-// mod bindings;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union hash256 {
@@ -29,8 +28,7 @@ pub union hash1024 {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
-// TODO: Can this be re-named?
-pub struct fishhash_context {
+pub struct FishhashContext {
     pub light_cache_num_items: ::std::os::raw::c_int,
     pub light_cache: *mut hash512,
     pub full_dataset_num_items: ::std::os::raw::c_int,
@@ -38,7 +36,7 @@ pub struct fishhash_context {
 }
 
 extern "C" {
-    pub fn get_context(full: bool) -> *mut fishhash_context;
-    pub fn prebuild_dataset(arg1: *mut fishhash_context, numThreads: u32);
-    pub fn hash(output: *mut u8, ctx: *const fishhash_context, header: *const u8, header_size: u64);
+    pub fn get_context(full: bool) -> *mut FishhashContext;
+    pub fn prebuild_dataset(arg1: *mut FishhashContext, numThreads: u32);
+    pub fn hash(output: *mut u8, ctx: *const FishhashContext, header: *const u8, header_size: u64);
 }
