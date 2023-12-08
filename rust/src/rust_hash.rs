@@ -1,3 +1,5 @@
+use std::ops::BitXor;
+
 use blake3::Hasher;
 
 use crate::keccak::{keccak, keccak_in_place};
@@ -83,12 +85,14 @@ impl HashData for Hash512 {
     }
 }
 
-impl Hash512 {
-    fn xor(a: &Self, b: &Self) -> Self {
+impl BitXor<&Hash512> for &Hash512 {
+    type Output = Hash512;
+
+    fn bitxor(self, rhs: &Hash512) -> Self::Output {
         let mut hash = Hash512::new();
 
         for i in 0..64 {
-            hash.0[i] = a.0[i] ^ b.0[i];
+            hash.0[i] = self.0[i] ^ rhs.0[i]
         }
 
         hash
@@ -218,10 +222,10 @@ fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash102
     keccak_in_place(&mut mix0.0);
     keccak_in_place(&mut mix1.0);
 
-    const NUM_WORDS: u32 = 16; // TODO: not sure why this was calculated dynamically in C++
+    let num_words: u32 = (std::mem::size_of_val(&mix0) / SIZE_U32) as u32;
     for j in 0..FULL_DATASET_ITEM_PARENTS {
-        let t0 = fnv1(seed0 ^ j, mix0.get_as_u32((j % NUM_WORDS) as usize));
-        let t1 = fnv1(seed1 ^ j, mix1.get_as_u32((j % NUM_WORDS) as usize));
+        let t0 = fnv1(seed0 ^ j, mix0.get_as_u32((j % num_words) as usize));
+        let t1 = fnv1(seed1 ^ j, mix1.get_as_u32((j % num_words) as usize));
         mix0 = fnv1_512(mix0, light_cache[(t0 % LIGHT_CACHE_NUM_ITEMS) as usize]);
         mix1 = fnv1_512(mix1, light_cache[(t1 % LIGHT_CACHE_NUM_ITEMS) as usize]);
     }
@@ -280,7 +284,7 @@ fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
 
     // Collapse the result into 32 bytes
     let mut mix_hash = Hash256::new();
-    let num_words = std::mem::size_of_val(&mix) / std::mem::size_of::<u32>();
+    let num_words = std::mem::size_of_val(&mix) / SIZE_U32;
 
     for i in (0..num_words).step_by(4) {
         let h1 = fnv1(mix.get_as_u32(i), mix.get_as_u32(i + 1));
@@ -323,14 +327,14 @@ fn build_light_cache(cache: &mut [Hash512]) {
     for _ in 0..LIGHT_CACHE_ROUNDS {
         for i in 0..LIGHT_CACHE_NUM_ITEMS {
             // First index: 4 first bytes of the item as little-endian integer
-            let t: u32 = u32::from_le_bytes(cache[i as usize].0[0..4].try_into().unwrap());
+            let t: u32 = cache[i as usize].get_as_u32(0);
             let v: u32 = t % LIGHT_CACHE_NUM_ITEMS;
 
             // Second index
             let w: u32 =
                 (LIGHT_CACHE_NUM_ITEMS.wrapping_add(i.wrapping_sub(1))) % LIGHT_CACHE_NUM_ITEMS;
 
-            let x = Hash512::xor(&cache[v as usize], &cache[w as usize]);
+            let x = &cache[v as usize] ^ &cache[w as usize];
             keccak(&mut cache[i as usize].0, &x.0);
         }
     }
