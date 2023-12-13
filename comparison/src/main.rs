@@ -1,10 +1,8 @@
 use std::time::Instant;
 
-use crate::rust_hash::HashData;
+use fish_hash::HashData;
 
 mod fish_hash_bindings;
-mod keccak;
-mod rust_hash;
 
 fn main() {
     unsafe {
@@ -24,7 +22,7 @@ unsafe fn compare_get_context_light() {
     println!("{:?}", context_c.read().light_cache.read().bytes);
 
     let start_r = Instant::now();
-    let context_r = rust_hash::Context::new(false);
+    let context_r = fish_hash::Context::new(false);
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", context_r.light_cache[0].as_bytes());
@@ -61,7 +59,7 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_c.as_millis()
     );
 
-    let mut context_r = rust_hash::Context::new(true);
+    let mut context_r = fish_hash::Context::new(true);
 
     let start_r = Instant::now();
     context_r.prebuild_dataset(num_threads as usize);
@@ -91,7 +89,7 @@ unsafe fn compare_validation() {
     ];
 
     let context_c = fish_hash_bindings::get_context(false);
-    let mut context_r = rust_hash::Context::new(false);
+    let mut context_r = fish_hash::Context::new(false);
 
     for input in inputs {
         println!("Validating {:?}", input);
@@ -105,7 +103,7 @@ unsafe fn compare_validation() {
 
         let start_r = Instant::now();
         let mut output_r = [0u8; 32];
-        rust_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
+        fish_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
         let elapsed_r = start_r.elapsed();
 
         println!("Rust: {:02X?}", output_r);
@@ -134,7 +132,7 @@ unsafe fn compare_hash(prebuild: bool) {
     let num_threads = 8;
 
     let context_c = fish_hash_bindings::get_context(true);
-    let mut context_r = rust_hash::Context::new(true);
+    let mut context_r = fish_hash::Context::new(true);
 
     if prebuild {
         fish_hash_bindings::prebuild_dataset(context_c, num_threads);
@@ -153,7 +151,7 @@ unsafe fn compare_hash(prebuild: bool) {
 
         let start_r = Instant::now();
         let mut output_r = [0u8; 32];
-        rust_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
+        fish_hash::hash(&mut output_r, &mut context_r, input.as_bytes());
         let elapsed_r = start_r.elapsed();
 
         println!("Rust: {:02X?}", output_r);
