@@ -1,8 +1,6 @@
 use std::ops::BitXor;
 
-use blake3::Hasher;
-
-use crate::keccak::{keccak, keccak_in_place};
+use tiny_keccak::Hasher;
 
 const FNV_PRIME: u32 = 0x01000193;
 const FULL_DATASET_ITEM_PARENTS: u32 = 512;
@@ -239,7 +237,7 @@ fn calculate_dataset_item_1024(light_cache: &[Hash512], index: usize) -> Hash102
 pub fn hash(output: &mut [u8], context: &mut Context, header: &[u8]) {
     let mut seed: Hash512 = Hash512::new();
 
-    let mut hasher = Hasher::new();
+    let mut hasher = blake3::Hasher::new();
     hasher.update(header);
     let mut output_reader = hasher.finalize_xof();
     output_reader.fill(&mut seed.0);
@@ -338,4 +336,16 @@ fn build_light_cache(cache: &mut [Hash512]) {
             keccak(&mut cache[i as usize].0, &x.0);
         }
     }
+}
+
+pub fn keccak_in_place(data: &mut [u8]) {
+    let mut hasher = tiny_keccak::Keccak::v512();
+    hasher.update(data);
+    hasher.finalize(data);
+}
+
+pub fn keccak(out: &mut [u8], data: &[u8]) {
+    let mut hasher = tiny_keccak::Keccak::v512();
+    hasher.update(data);
+    hasher.finalize(out);
 }
