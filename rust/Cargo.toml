@@ -2,6 +2,12 @@
 name = "fish_hash"
 version = "0.1.0"
 edition = "2021"
+license = "MPL-2.0"
+
+description = "Hashing algorithm used for Iron Fish"
+authors = ["Iron Fish <contact@ironfish.network> (https://ironfish.network)"]
+homepage = "https://ironfish.network/"
+repository = "https://github.com/iron-fish/ironfish"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
