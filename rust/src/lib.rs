@@ -191,7 +191,7 @@ fn build_dataset_segment(dataset_slice: &mut [Hash1024], light_cache: &[Hash512]
 }
 
 fn fnv1(u: u32, v: u32) -> u32 {
-    (u * FNV_PRIME) ^ v
+    u.wrapping_mul(FNV_PRIME) ^ v
 }
 
 fn fnv1_512(u: Hash512, v: Hash512) -> Hash512 {
