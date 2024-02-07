@@ -22,7 +22,7 @@ unsafe fn compare_get_context_light() {
     println!("{:?}", context_c.read().light_cache.read().bytes);
 
     let start_r = Instant::now();
-    let context_r = fish_hash::Context::new(false);
+    let context_r = fish_hash::Context::new(false, None);
     let elapsed_r = start_r.elapsed();
 
     println!("{:?}", context_r.light_cache[0].as_bytes());
@@ -59,7 +59,7 @@ unsafe fn compare_prebuild_dataset() {
         elapsed_c.as_millis()
     );
 
-    let mut context_r = fish_hash::Context::new(true);
+    let mut context_r = fish_hash::Context::new(true, None);
 
     let start_r = Instant::now();
     context_r.prebuild_dataset(num_threads as usize);
@@ -89,7 +89,7 @@ unsafe fn compare_validation() {
     ];
 
     let context_c = fish_hash_bindings::get_context(false);
-    let mut context_r = fish_hash::Context::new(false);
+    let mut context_r = fish_hash::Context::new(false, None);
 
     for input in inputs {
         println!("Validating {:?}", input);
@@ -132,7 +132,7 @@ unsafe fn compare_hash(prebuild: bool) {
     let num_threads = 8;
 
     let context_c = fish_hash_bindings::get_context(true);
-    let mut context_r = fish_hash::Context::new(true);
+    let mut context_r = fish_hash::Context::new(true, None);
 
     if prebuild {
         fish_hash_bindings::prebuild_dataset(context_c, num_threads);
