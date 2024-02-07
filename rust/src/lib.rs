@@ -9,10 +9,10 @@ const LIGHT_CACHE_ROUNDS: i32 = 3;
 
 const LIGHT_CACHE_NUM_ITEMS: u32 = 1179641;
 const FULL_DATASET_NUM_ITEMS: u32 = 37748717;
-const SEED: Hash256 = Hash256([
+const SEED: [u8; 32] = [
     0xeb, 0x01, 0x63, 0xae, 0xf2, 0xab, 0x1c, 0x5a, 0x66, 0x31, 0x0c, 0x1c, 0x14, 0xd6, 0x0f, 0x42,
     0x55, 0xa9, 0xb3, 0x9b, 0x0e, 0xdf, 0x26, 0x53, 0x98, 0x44, 0xf1, 0x17, 0xad, 0x67, 0x21, 0x19,
-]);
+];
 
 const SIZE_U32: usize = std::mem::size_of::<u32>();
 const SIZE_U64: usize = std::mem::size_of::<u64>();
@@ -131,13 +131,23 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(full: bool) -> Self {
+    /// Create a new cache context for the FishHash algorithm. Light cache is ~75MB and full
+    /// cache is ~4.6GB.
+    ///
+    /// # Arguments
+    ///
+    /// * `full` - whether to build the full dataset or just the light cache
+    /// * `seed` - the seed to use for the light cache. If None, the default seed is used.
+    /// The FishHash specification is to always use the default seed but the option is
+    /// still provided for potential future use cases like rotating the cache.
+    pub fn new(full: bool, seed: Option<[u8; 32]>) -> Self {
         // Vec into boxed sliced, because you can't allocate an array directly on
         // the heap in rust
         // https://stackoverflow.com/questions/25805174/creating-a-fixed-size-array-on-heap-in-rust/68122278#68122278
         let mut light_cache =
             vec![Hash512::new(); LIGHT_CACHE_NUM_ITEMS as usize].into_boxed_slice();
-        build_light_cache(&mut light_cache);
+
+        build_light_cache(&mut light_cache, seed.unwrap_or(SEED));
 
         let full_dataset = if full {
             Some(vec![Hash1024::new(); FULL_DATASET_NUM_ITEMS as usize].into_boxed_slice())
@@ -308,9 +318,9 @@ fn lookup(context: &mut Context, index: usize) -> Hash1024 {
     }
 }
 
-fn build_light_cache(cache: &mut [Hash512]) {
+fn build_light_cache(cache: &mut [Hash512], seed: [u8; 32]) {
     let mut item: Hash512 = Hash512::new();
-    keccak(&mut item.0, &SEED.0);
+    keccak(&mut item.0, &seed);
     cache[0] = item;
 
     for cache_item in cache
