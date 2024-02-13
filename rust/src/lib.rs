@@ -285,7 +285,10 @@ fn fishhash_kernel(context: &mut Context, seed: &Hash512) -> Hash256 {
         for j in 0..16 {
             mix.set_as_u64(
                 j,
-                fetch0.get_as_u64(j) * fetch1.get_as_u64(j) + fetch2.get_as_u64(j),
+                fetch0
+                    .get_as_u64(j)
+                    .wrapping_mul(fetch1.get_as_u64(j))
+                    .wrapping_add(fetch2.get_as_u64(j)),
             );
         }
     }
